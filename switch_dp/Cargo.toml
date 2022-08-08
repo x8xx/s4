@@ -1,0 +1,9 @@
+[package]
+name = "switch_dp"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rust-dpdk-sys = { git = "https://github.com/x8xx/rust-dpdk.git", rev = "3c72af1a8c1549105c1112285ebba4feaca0a4b5" }
