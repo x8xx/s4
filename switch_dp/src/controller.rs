@@ -54,6 +54,7 @@ pub fn controller_start(switch_config: &SwitchConfig) {
 
 
     let mut rx_start_args = rx::RxStartArgs {
+        if_name: &switch_config.if_name,
         l1_cache,
         lb_filter,
         fib_core_rings: &fib_core_rings,

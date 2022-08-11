@@ -2,7 +2,6 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 use std::os::raw::c_void;
 use std::ptr::null_mut;
-use std::ptr::slice_from_raw_parts_mut;
 use std::mem::size_of;
 use std::mem::transmute;
 
