@@ -1,6 +1,7 @@
 pub mod token;
 pub mod tokenize;
 pub mod parser;
+pub mod eval;
 
 pub fn compile(src: &str) -> String {
     let mut token = tokenize::tokenize(src);
