@@ -1,3 +1,4 @@
+pub mod parser;
 pub mod cache;
 pub mod l1_cache;
 pub mod lb_filter;

@@ -3,6 +3,7 @@ use std::mem::transmute;
 use crate::fib::*;
 use crate::dpdk::dpdk_memory;
 use crate::dpdk::dpdk_port;
+use crate::dpdk::dpdk_eth;
 
 
 #[repr(C)]
@@ -15,6 +16,8 @@ pub struct RxStartArgs<'a> {
 
 
 pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
+    println!("rx_start");
+
     let rx_start_args = unsafe {&*transmute::<*mut c_void, *mut RxStartArgs>(rx_start_args_ptr)};
     let if_name = &rx_start_args.if_name;
     let l1_cache = &rx_start_args.l1_cache;
@@ -23,6 +26,21 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
 
     let pktmbuf = dpdk_memory::create_pktmbuf("mbuf");
     let port_number = dpdk_port::port_init(if_name, pktmbuf);
+
+    let pp = dpdk_eth::PktProcessor::new(port_number);
+    loop {
+        let rx_count = pp.rx();
+        if rx_count <= 0 {
+            continue;
+        }
+        for i in 0..rx_count {
+            let pkt = pp.get_packet(i);
+            for i in 0..pkt.len() {
+                print!("{:x} ", pkt[i]);
+            }
+        }
+        // pp.tx();
+    }
 
     // let mut pkts: [*mut dpdk_sys::rte_mbuf; 32] = [null_mut(); 32];
     // while true {
@@ -45,8 +63,5 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
     //     // let tap_tx = dpdk_sys::rte_eth_tx_burst(1, 0, pkts.as_ptr() as *mut *mut dpdk_sys::rte_mbuf, tap_rx);
     //     // println!("send: {}", tap_tx);
     // }
-
-
-    println!("rx_start");
     0
 }
