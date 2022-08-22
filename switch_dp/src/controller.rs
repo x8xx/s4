@@ -1,15 +1,9 @@
-use std::thread;
-use std::time::Duration;
-
+use std::collections::HashMap;
 use crate::config::*;
 use crate::dpdk::dpdk_memory;
-use crate::fib::lb_filter;
 use crate::worker::*;
 use crate::fib::cache::*;
-use crate::fib::l1_cache::*;
-use crate::fib::lb_filter::*;
-// use crate::fib::l2_cache;
-// use crate::fib::l3_cache;
+use crate::fib::parser::*;
 
 
 fn allocate_core_to_worker(switch_config: &SwitchConfig,
@@ -39,44 +33,45 @@ fn allocate_core_to_worker(switch_config: &SwitchConfig,
 }
 
 
+// main core
 pub fn controller_start(switch_config: &SwitchConfig) {
+    /* ------------------------
+     * parser
+     * --------------------------*/
+    let dp_config_json = get_sample_dp_config();
+    let dp_config = DataPlaneConfig::new(&dp_config_json); 
+    let hdr_hashmap: HashMap<String, &Header> = HashMap::new();
+    let parser = create_parser(&dp_config, &hdr_hashmap, "start", 0);
+
+
+    /* ------------------------
+     * rx core
+     * --------------------------*/
     let l1_cache_len = 4096;
-    let l1_cache_element_ptr = dpdk_memory::malloc::<CacheElement>("l1_cache", l1_cache_len);
-    let l1_cache = L1Cache::new(l1_cache_element_ptr, l1_cache_len, 1);
+    let l1_cache = dpdk_memory::malloc::<CacheElement>("l1_cache", l1_cache_len);
 
     let lb_filter_len = 65535;
-    let lb_filter_ptr = dpdk_memory::malloc::<u8>("lb_filter", lb_filter_len);
-    let lb_filter = LbFilter::new(lb_filter_ptr, lb_filter_len);
+    let lb_filter = dpdk_memory::malloc::<u8>("lb_filter", lb_filter_len);
 
     let mut fib_core_rings = Vec::new();
     fib_core_rings.push(dpdk_memory::Ring::new("fib1", 4096));
     fib_core_rings.push(dpdk_memory::Ring::new("fib2", 4096));
 
-
     let mut rx_start_args = rx::RxStartArgs {
         if_name: &switch_config.if_name,
+        parser: &parser,
         l1_cache,
         lb_filter,
         fib_core_rings: &fib_core_rings,
     };
-    let mut fib_start_args =fib::FibStartArgs {};
+
+
+    /* ------------------------
+     * fib core
+     * --------------------------*/
+    let mut fib_start_args =fib::FibStartArgs {
+
+    };
 
     allocate_core_to_worker(switch_config, &mut rx_start_args, &mut fib_start_args);
-
-
-    // ===========================
-    // thread test
-    // ===========================
-    // let handle = thread::spawn(|| {
-    // for i in 1..10 {
-    //     println!("hi number {} from the spawned thread!", i);
-    //     thread::sleep(Duration::from_millis(1));
-    //     }
-    // });
-
-    // for i in 1..5 {
-    //     println!("hi number {} from the main thread!", i);
-    //     thread::sleep(Duration::from_millis(1));
-    // }
-    // handle.join().unwrap();
 }
