@@ -38,10 +38,11 @@ pub fn controller_start(switch_config: &SwitchConfig) {
     /* ------------------------
      * parser
      * --------------------------*/
-    let dp_config_json = get_sample_dp_config();
-    let dp_config = DataPlaneConfig::new(&dp_config_json); 
-    let hdr_hashmap: HashMap<String, &Header> = HashMap::new();
-    let parser = create_parser(&dp_config, &hdr_hashmap, "start", 0);
+    // let dp_config_json = get_sample_dp_config();
+    // let dp_config = DataPlaneConfig::new(&dp_config_json); 
+    // let mut parser_hashmap: HashMap<String, &Parser> = HashMap::new();
+    // let mut hdr_hashmap: HashMap<String, &Header> = HashMap::new();
+    // let parser = create_parser(&dp_config, &mut parser_hashmap, &mut hdr_hashmap, "start", 0);
 
 
     /* ------------------------

@@ -24,6 +24,7 @@ pub enum Parser<'a> {
         match_patterns: &'a [ParseMatchPattern<'a>],
     },
     Accept,
+    
 }
 
 
@@ -34,7 +35,23 @@ pub struct  ParseMatchPattern<'a> {
 
 
 impl <'a> Parser<'a> {
-    pub fn parse(&self, packet: &[u8]) -> Option<&Parser> {
+    pub fn parse(&'a self, packet: &'a [u8], extract_headers: &'a mut [&'a Header<'a>]) {
+        let mut parser = Some(self);
+        let mut hdr_count = 0;
+        for hdr in parser.unwrap().get_extarct_headers().unwrap().iter() {
+            extract_headers[hdr_count] = hdr;
+            hdr_count += 1;
+        }
+        while match parser { None => false, _ => true } {
+            for hdr in parser.unwrap().get_extarct_headers().unwrap().iter() {
+                extract_headers[hdr_count] = hdr;
+                hdr_count += 1;
+            }
+            parser = parser.unwrap().matching(packet);
+        }
+    }
+
+    fn matching(&self, packet: &[u8]) -> Option<&Parser> {
         match self {
             Parser::Parser { extract_headers: _, select_keys, match_patterns } => {
                 for match_pattern in match_patterns.iter() {
@@ -74,6 +91,15 @@ impl <'a> Parser<'a> {
             Parser::Accept => None,
         }
     }
+
+    fn get_extarct_headers(&'a self) -> Option<&'a [&'a Header]> {
+        match self {
+            Parser::Parser { extract_headers, select_keys: _, match_patterns: _ } => {
+                Some(extract_headers)
+            },
+            _ => None
+        }
+    }
 }
 
 
@@ -104,43 +130,9 @@ impl DataPlaneConfig {
         let dp_conf: DataPlaneConfig = serde_json::from_str(json_str).unwrap();
         dp_conf
     }
-
-    pub fn sum_header_field_len(&self) -> usize {
-        let mut sum: usize = 0;
-        for hdr in self.headers.iter() {
-            sum += hdr.1.len();
-        }
-        sum
-    }
-
-    pub fn sum_extract_headers_len(&self) -> usize {
-        let mut sum: usize = 0;
-        for parser in self.parsers.iter() {
-            sum += parser.1.extract_headers.len();
-        }
-        sum
-    }
-
-    pub fn sum_select_keys_len(&self) -> usize {
-        let mut sum: usize = 0;
-        for parser in self.parsers.iter() {
-            sum += parser.1.select_keys.len();
-        }
-        sum
-    }
-
-    // pub fn sum_select_keys_len(&self) -> usize {
-    //     let mut sum: usize = 0;
-    //     for parser in self.parsers.iter() {
-    //         sum += parser.1.select_keys.len();
-    //     }
-    //     sum
-    // }
 }
 
 
-
-// pub fn load_dataplane_config_from_json(json_str: &str) -> Parser {
 pub fn load_dataplane_config_from_json(json_str: &str) -> DataPlaneConfig {
     let dp_conf: DataPlaneConfig = serde_json::from_str(json_str).unwrap();
     dp_conf
@@ -176,57 +168,88 @@ pub fn get_sample_dp_config() -> String {
 }
 
 
-pub fn create_parser<'a>(dp_config: &'a DataPlaneConfig, hdr_hashmap: &'a HashMap<String, &Header>, parser_name: &'a str, base_pos: usize) -> Parser<'a> {
+pub fn create_parser<'a>(dp_config: &'a DataPlaneConfig,
+                         parser_hashmap: &'a mut HashMap<String, &Parser<'a>>,
+                         hdr_hashmap: &'a mut HashMap<String, &Header<'a>>,
+                         parser_name: &'a str,
+                         base_pos: usize) -> &'a Parser<'a> {
+    let parser = &dpdk_memory::malloc::<Parser>(parser_name, 1)[0];
+    parser_hashmap.insert(parser_name.to_string(), parser);
+
     let parser_conf = &dp_config.parsers[parser_name];
 
+    let extract_headers_mempool_name = format!("{}{}", parser_name, "_extract_headers");
+    let extract_headers = dpdk_memory::malloc::<&Header>(&extract_headers_mempool_name, parser_conf.extract_headers.len() as u32);
+
     // create header
-    for hdr_name in parser_conf.extract_headers.iter() {
+    for (i, hdr_name) in parser_conf.extract_headers.iter().enumerate() {
         if !hdr_hashmap.contains_key(hdr_name) {
-            let hdr_conf = &dp_config.headers[hdr_name];
-            let header = dpdk_memory::malloc::<Header>(hdr_name, 1);
-
-            let fields_mempool_name = format!("{}{}", hdr_name, "_fields");
-            let fields = dpdk_memory::malloc::<Field>(&fields_mempool_name, hdr_conf.len() as u32);
-
-            let used_fields_mempool_name = format!("{}{}", hdr_name, "_used_fields");
-            let used_fields = dpdk_memory::malloc::<Field>(&used_fields_mempool_name, hdr_conf.len() as u32);
-            
-            {
-                let mut end_byte_pos = 0;
-                let mut end_bit_mask = 0;
-                for (i, field_bit_size) in hdr_conf.iter().enumerate() {
-                    let (start_byte_pos, start_bit_mask): (usize, u8) = if end_bit_mask == 0xff {
-                        if *field_bit_size >= 8 {
-                            (end_byte_pos + 1, 0xff)
-                        } else {
-                            let mask_list = [128, 192, 224, 240, 248, 252, 254];
-                            (end_byte_pos + 1, mask_list[*field_bit_size as usize - 1])
-                        }
-                    } else {
-                        (end_byte_pos, 0)
-                    };
-
-
-                    // let start_byte_pos = if i > 0 { 
-                    //     fields[i - 1].end_byte_pos + if fields[i - 1].end_bit_mask == 0xff { 1 } else { 0 }
-                    // } else { 
-                    //     0
-                    // };
-                    // end_byte_pos = start_byte_pos + field_bit_size;
-                    
-                    fields[i].start_byte_pos = start_byte_pos;
-                    fields[i].start_bit_mask = start_bit_mask;
-                    fields[i].end_byte_pos = end_byte_pos;
-                    fields[i].end_bit_mask = end_bit_mask;
-                }
-            }
-
-            hdr_hashmap[hdr_name] = &header[0];
+            hdr_hashmap.insert(hdr_name.to_string(), create_header(hdr_name, &dp_config.headers[hdr_name]));
         }
+        extract_headers[i] = hdr_hashmap[hdr_name];
     }
 
+    // select keys
     
-    Parser::Accept
+
+    // match pattern
+    &parser
+}
+
+
+// fn create_header<'a, 'b>(hdr_name: &'a str, hdr_conf: &'b [u16]) -> &'b Header<'b> {
+fn create_header<'a>(hdr_name: &'a str, hdr_conf: &'a [u16]) -> &'a Header<'a> {
+    // let hdr_name_string = hdr_name.to_string();
+    // let header = &dpdk_memory::malloc::<Header>(&hdr_name_string, 1)[0];
+    let header = &dpdk_memory::malloc::<Header>(&hdr_name, 1)[0];
+
+    let fields_mempool_name = format!("{}{}", hdr_name, "_fields");
+    let fields = dpdk_memory::malloc::<Field>(&fields_mempool_name, hdr_conf.len() as u32);
+
+    let used_fields_mempool_name = format!("{}{}", hdr_name, "_used_fields");
+    let used_fields = dpdk_memory::malloc::<Field>(&used_fields_mempool_name, hdr_conf.len() as u32);
+    
+    let mut end_byte_pos = 0;
+    let mut end_bit_mask = 0;
+    for (i, field_bit_size) in hdr_conf.iter().enumerate() {
+        let (start_byte_pos, start_bit_mask, read_bit): (usize, u8, u16) = if end_bit_mask == 0xff {
+            if *field_bit_size >= 8 {
+                (end_byte_pos + 1, 0xff, 8)
+            } else {
+                let mask_list = [128, 192, 224, 240, 248, 252, 254];
+                (end_byte_pos + 1, mask_list[*field_bit_size as usize - 1], *field_bit_size)
+            }
+        } else {
+            let bit_sapce = 8 - (end_bit_mask as u64).count_ones();
+            if bit_sapce > *field_bit_size as u32 {
+                let mask_list = [128, 192, 224, 240, 248, 252, 254];
+                (end_byte_pos, mask_list[bit_sapce as usize - 1] ^ mask_list[8 - *field_bit_size as usize] , *field_bit_size)
+            } else {
+                (end_byte_pos, end_bit_mask ^ 0xff, bit_sapce as u16)
+            }
+        };
+
+        let field_bit_size = *field_bit_size - read_bit;
+        if field_bit_size == 0 {
+            fields[i].start_byte_pos = start_byte_pos;
+            fields[i].start_bit_mask = start_bit_mask;
+            fields[i].end_byte_pos = start_byte_pos;
+            fields[i].end_bit_mask = start_bit_mask;
+        } else {
+            let residue_bit = field_bit_size % 8;
+            if residue_bit == 0 {
+                fields[i].end_byte_pos = (field_bit_size / 8) as usize;
+                fields[i].end_bit_mask = 0xff;
+            } else {
+                fields[i].end_byte_pos = (field_bit_size / 8) as usize + 1;
+                fields[i].end_bit_mask = 0xff;
+            }
+        }
+
+        end_byte_pos = fields[i].end_byte_pos;
+        end_bit_mask = fields[i].end_bit_mask;
+    }
+    header
 }
 
 
