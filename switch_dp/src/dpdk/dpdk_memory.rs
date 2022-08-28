@@ -4,6 +4,7 @@ use std::os::raw::c_void;
 use std::ptr::null_mut;
 use std::mem::size_of;
 use std::mem::transmute;
+use std::slice::from_raw_parts_mut;
 
 
 pub struct Ring {
@@ -27,16 +28,17 @@ impl Ring {
 
     }
 
-    pub fn enqueue(&self, receive_ptr: *const *mut c_void, obj_len: u32) -> u32 {
+    pub fn enqueue<T>(&self, receive_obj: &mut T) -> i32 {
         unsafe {
-            dpdk_sys::rte_ring_enqueue_burst(self.rte_ring, receive_ptr, obj_len, null_mut())
+            // dpdk_sys::rte_ring_enqueue_burst(self.rte_ring, receive_ptr, obj_len, null_mut())
+            dpdk_sys::rte_ring_mp_enqueue(self.rte_ring, receive_obj as *mut T as *mut c_void)
         }
     }
 
 
-    pub fn dequeue(&self, obj_ptr: *mut *mut c_void, obj_len: u32) -> u32 {
+    pub fn dequeue<T>(&self, obj: &mut T) -> i32 {
         unsafe {
-            dpdk_sys::rte_ring_dequeue_burst(self.rte_ring, obj_ptr, obj_len, null_mut())
+            dpdk_sys::rte_ring_mc_dequeue(self.rte_ring, obj as *mut T as *mut *mut c_void)
         }
     }
 }
@@ -57,7 +59,8 @@ pub fn create_pktmbuf(name: &str) -> *mut dpdk_sys::rte_mempool {
 }
 
 
-pub fn malloc<T>(name: &str, size: u32) -> *mut T {
+// pub fn malloc<T>(name: &str, size: u32) -> *mut T {
+pub fn malloc<T>(name: String, size: u32) -> &'static mut [T] {
     let name_cstr = CString::new(name).unwrap();
     unsafe {
         let mempool = dpdk_sys::rte_mempool_create(
@@ -73,7 +76,9 @@ pub fn malloc<T>(name: &str, size: u32) -> *mut T {
             0,
             0
         );
-        transmute::<*mut c_void, *mut T>((*mempool).__bindgen_anon_1.pool_data)
+        // transmute::<*mut c_void, *mut T>((*mempool).__bindgen_anon_1.pool_data)
+        let data_ptr = transmute::<*mut c_void, *mut T>((*mempool).__bindgen_anon_1.pool_data);
+        from_raw_parts_mut(data_ptr, (size as usize) * size_of::<T>())
     }
 }
 

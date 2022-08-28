@@ -1,62 +1,70 @@
-pub struct CacheElement {
-    pub key: *const u8,
-    pub action_id: u8,
+use crate::dpdk::dpdk_memory;
+
+pub struct CacheElement<'a> {
+    key: &'a mut [u8],
+    key_len: u8,
+    action_id: u8,
 }
 
 
-impl CacheElement {
-    pub fn new(key: *const u8, action_id: u8) -> Self {
-        CacheElement {
-            key,
-            action_id,
-        }
+impl<'a> CacheElement<'a> {
+    pub fn clean(&mut self, key: &'a mut [u8]) {
+        self.key = key;
+        self.key_len = 0;
+        self.action_id = 0;
     }
 
-    pub fn compare_key(&self, key: *const u8, key_len: u8) -> bool {
-        unsafe {
-            if *(self.key) != *key {
-                return false
-            }
-
-            for i in 1..key_len {
-                if *(self.key.offset(i as isize)) != *key.offset(i as isize) {
-                    return false
-                }
+    pub fn compare_key(&self, key: &[u8]) -> Option<u8> {
+        if self.key_len == 0 {
+            return None;
+        }
+        for i in 0..self.key_len {
+            if self.key[i as usize] != key[i as usize] {
+                return None;
             }
         }
-        true
+        Some(self.action_id)
+    }
+
+    pub fn update(&mut self, key: &'a [u8], action_id: u8) {
+        self.key_len = key.len() as u8;
+        for i in 0..key.len() {
+                self.key[i] = key[i];
+        }
+        self.action_id = action_id;
     }
 }
+
+
+// pub struct Key<'a> {
+//     key: &'a  mut [u8],
+//     len: usize,
+// }
+
+
+// impl<'a> Key<'a> {
+//     pub fn new(key: &'a mut [u8]) -> Self {
+//         Key {
+//             key,
+//             len: 0,
+//         }
+//     }
+// }
 
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn test_cache_element_compare_key() {
-        let mut ce_u8_key: u8 = 0xff;
-        let mut ce_u8_key_ptr: *mut u8 = &mut ce_u8_key;
-        let ce = CacheElement {
-            key: ce_u8_key_ptr,
-            action_id: 1,
-        };
-        let mut test1_key: u8 = 0xff;
-        let mut test1_key_ptr: *mut u8 = &mut test1_key;
-        assert!(ce.compare_key(test1_key_ptr, 1));
-        test1_key = 0x64;
-        assert!(!ce.compare_key(test1_key_ptr, 1));
-
-
-        let mut ce_u16_key: [u8;2] = [0xff, 0x64];
-        let mut ce_u16_key_ptr: *mut u8 =  ce_u16_key.as_ptr() as *mut u8;
-        let ce = CacheElement {
-            key: ce_u16_key_ptr,
-            action_id: 1,
-        };
-        let mut test2_key: [u8;2] = [0xff, 0x64];
-        let mut test2_key_ptr: *mut u8 =  test2_key.as_ptr() as *mut u8;
-        assert!(ce.compare_key(test2_key_ptr, 2));
-        test2_key[1] = 0xff;
-        assert!(!ce.compare_key(test2_key_ptr, 2));
+    fn test_cache_element() {
+        // let key1: [u8; 3] = [0xff, 0x10, 0x0f];
+        // let mut ce = CacheElement::new(&key1, 3);
+        // assert_ne!(ce.compare_key(&key1), None);
+        // assert_eq!(ce.compare_key(&key1), Some(3));
+        // let key2: [u8; 3] = [0xff, 0x20, 0x0f];
+        // assert_eq!(ce.compare_key(&key2), None);
+        // ce.update(&key2, 4);
+        // assert_ne!(ce.compare_key(&key2), None);
+        // assert_eq!(ce.compare_key(&key2), Some(4));
     }
 }

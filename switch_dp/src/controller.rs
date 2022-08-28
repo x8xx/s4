@@ -48,11 +48,19 @@ pub fn controller_start(switch_config: &SwitchConfig) {
     /* ------------------------
      * rx core
      * --------------------------*/
-    let l1_cache_len = 4096;
-    let l1_cache = dpdk_memory::malloc::<CacheElement>("l1_cache", l1_cache_len);
+    let l1_cache_len = 256;
+    let l1_cache = dpdk_memory::malloc::<CacheElement>("l1_cache".to_string(), l1_cache_len);
+    println!("{}", std::mem::size_of::<usize>());
+    let l1_key_max_len = 48;
+    for i in 0..l1_cache_len {
+        let key_mempool = dpdk_memory::malloc::<u8>(format!("l1_cache_key_{}", i), l1_key_max_len);
+        l1_cache[i as usize].clean(key_mempool);
+    }
+    println!("{}", l1_cache.len());
 
     let lb_filter_len = 65535;
-    let lb_filter = dpdk_memory::malloc::<u8>("lb_filter", lb_filter_len);
+    let lb_filter = dpdk_memory::malloc::<u8>("lb_filter".to_string(), lb_filter_len);
+    lb_filter[0] = 0xff;
 
     let mut fib_core_rings = Vec::new();
     fib_core_rings.push(dpdk_memory::Ring::new("fib1", 4096));
@@ -60,7 +68,7 @@ pub fn controller_start(switch_config: &SwitchConfig) {
 
     let mut rx_start_args = rx::RxStartArgs {
         if_name: &switch_config.if_name,
-        parser: &parser,
+        // parser: &parser,
         l1_cache,
         lb_filter,
         fib_core_rings: &fib_core_rings,

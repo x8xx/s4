@@ -303,6 +303,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "murmurhash3"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2983372caf4480544083767bf2d27defafe32af49ab4df3a0b7fc90793a3664"
+
+[[package]]
 name = "nom"
 version = "4.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -470,6 +476,7 @@ name = "switch_dp"
 version = "0.1.0"
 dependencies = [
  "getopts",
+ "murmurhash3",
  "rust-dpdk-sys",
  "serde",
  "serde_json",
