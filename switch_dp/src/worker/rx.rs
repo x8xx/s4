@@ -10,8 +10,8 @@ use crate::dpdk::dpdk_eth;
 pub struct RxStartArgs<'a> {
     pub if_name: &'a str,
     // pub parser: &'a parser::Parser<'a>,
-    pub l1_cache: &'static [cache::CacheElement<'static>],
-    pub lb_filter: &'static mut [u8],
+    pub l1_cache: *mut u8,
+    pub lb_filter: *mut u8,
     pub fib_core_rings: &'a [dpdk_memory::Ring],
 }
 
@@ -52,10 +52,10 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
             let l1_hash = murmurhash3::murmurhash3_x86_32(l1_key, 1);
             println!("l1_hash {}", l1_hash);
             // match l1_cache[l1_hash as usize].compare_key(l1_key) {
-            match l1_cache[0].compare_key(l1_key) {
-                Some(u8) => continue,
-                None => 0,
-            };
+            // match l1_cache[0].compare_key(l1_key) {
+            //     Some(u8) => continue,
+            //     None => 0,
+            // };
 
             let l2_key = &pkt[0..112];
             let l2_hash = murmurhash3::murmurhash3_x86_32(l2_key, 1);

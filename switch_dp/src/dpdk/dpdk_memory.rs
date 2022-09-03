@@ -59,8 +59,8 @@ pub fn create_pktmbuf(name: &str) -> *mut dpdk_sys::rte_mempool {
 }
 
 
-// pub fn malloc<T>(name: &str, size: u32) -> *mut T {
-pub fn malloc<T>(name: String, size: u32) -> &'static mut [T] {
+pub fn malloc<T>(name: String, size: u32) -> *mut T {
+// pub fn malloc<T>(name: String, size: u32) -> &'static mut [T] {
     let name_cstr = CString::new(name).unwrap();
     unsafe {
         let mempool = dpdk_sys::rte_mempool_create(
@@ -76,9 +76,9 @@ pub fn malloc<T>(name: String, size: u32) -> &'static mut [T] {
             0,
             0
         );
-        // transmute::<*mut c_void, *mut T>((*mempool).__bindgen_anon_1.pool_data)
-        let data_ptr = transmute::<*mut c_void, *mut T>((*mempool).__bindgen_anon_1.pool_data);
-        from_raw_parts_mut(data_ptr, (size as usize) * size_of::<T>())
+        transmute::<*mut c_void, *mut T>((*mempool).__bindgen_anon_1.pool_data)
+        // let data_ptr = transmute::<*mut c_void, *mut T>((*mempool).__bindgen_anon_1.pool_data);
+        // from_raw_parts_mut(data_ptr, (size as usize) * size_of::<T>())
     }
 }
 
