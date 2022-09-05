@@ -63,8 +63,6 @@ pub fn controller_start(switch_config: &SwitchConfig) {
             (*(ptr as *const u8).offset(offset as isize)) as i32
         }
     }
-    let testr = read(test_array_ptr as i64, 2);
-    println!("test: {}", testr);
 
     let read_fn_store = wasmer::Store::default();
     let memory_store = wasmer::Store::default();
@@ -93,14 +91,6 @@ pub fn controller_start(switch_config: &SwitchConfig) {
     parser_args.push(wasmer::Value::I32(10));
     let parse_result = parser_fn_parse.call(&parser_args).unwrap();
     println!("parse_result: {}", parse_result[0].unwrap_i32());
-
-    // let parser_fn_read = parser_instance.exports.get_function("read2").unwrap();
-    // let mut read_args: Vec<wasmer::Value> = Vec::new();
-    // read_args.push(wasmer::Value::I32(2));
-    // read_args.push(wasmer::Value::I64(test_array_ptr as i64));
-    // let read_result = parser_fn_read.call(&read_args).unwrap();
-    // println!("read_result: {}", read_result[0].unwrap_i32());
-
 
     return;
 
