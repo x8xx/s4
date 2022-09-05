@@ -6,6 +6,7 @@ use crate::dpdk::dpdk_memory;
 use crate::worker::*;
 use crate::fib::cache::*;
 use crate::fib::parser::*;
+use wasmer_compiler_llvm::LLVM;
 
 fn allocate_core_to_worker(switch_config: &SwitchConfig,
                             rx_start_args: &mut rx::RxStartArgs,
@@ -42,31 +43,66 @@ pub fn controller_start(switch_config: &SwitchConfig) {
     let mut f = File::open(&switch_config.parser_path).unwrap();
     let metadata = std::fs::metadata(&switch_config.parser_path).unwrap();
     let mut parser_bin = vec![0;metadata.len() as usize];
-    f.read(&mut parser_bin);
+    f.read(&mut parser_bin).unwrap();
 
-    let parser_store = wasmer::Store::default();
+
+    let compiler = LLVM::default();
+    let parser_store = wasmer::Store::new(&wasmer::Universal::new(compiler).engine());
+
     let parser_module = wasmer::Module::from_binary(&parser_store, &parser_bin).unwrap();
-    let parser_import_object = wasmer::imports! {};
 
-    let parser_instance_result = wasmer::Instance::new(&parser_module, &parser_import_object);
-    let parser_instance = match parser_instance_result {
-        Ok(instance) => instance,
-        Err(error) => {
-            panic!("error: {:?}", error);
+    let mut test_array: Vec<u8> = Vec::new();
+    test_array.push(0);
+    test_array.push(1);
+    test_array.push(2);
+    test_array.push(3);
+    let test_array_ptr = test_array.as_ptr();
+    fn read(ptr: i64, offset: i32) -> i32 {
+        println!("ptr: {}", ptr);
+        unsafe {
+            (*(ptr as *const u8).offset(offset as isize)) as i32
         }
-    };
+    }
+    let testr = read(test_array_ptr as i64, 2);
+    println!("test: {}", testr);
 
-    
+    let read_fn_store = wasmer::Store::default();
+    let memory_store = wasmer::Store::default();
+    let read_fn = wasmer::Function::new_native(&read_fn_store, read);
+    let linear_memory = wasmer::Memory::new(&memory_store, wasmer::MemoryType::new(1, None, false)).unwrap();
+
+    let parser_import_object = wasmer::imports! {
+        "env" => {
+            "read" => read_fn,
+            "__linear_memory" => linear_memory,
+        },
+    };
+    // let parser_import_object = wasmer::imports! {};
+
+    let mut parser_instance = wasmer::Instance::new(&parser_module, &parser_import_object).unwrap();
+
+    // parser_instance.exports.insert("read2", read_fn);
     for (name, ext) in parser_instance.exports.iter() {
         println!("{}", name);
     }
-    let parser_fn_parse = parser_instance.exports.get_function("parse").unwrap();
 
+
+    let parser_fn_parse = parser_instance.exports.get_function("parse").unwrap();
     let mut parser_args: Vec<wasmer::Value> = Vec::new();
+    parser_args.push(wasmer::Value::I64(test_array_ptr as i64));
     parser_args.push(wasmer::Value::I32(10));
     let parse_result = parser_fn_parse.call(&parser_args).unwrap();
     println!("parse_result: {}", parse_result[0].unwrap_i32());
 
+    // let parser_fn_read = parser_instance.exports.get_function("read2").unwrap();
+    // let mut read_args: Vec<wasmer::Value> = Vec::new();
+    // read_args.push(wasmer::Value::I32(2));
+    // read_args.push(wasmer::Value::I64(test_array_ptr as i64));
+    // let read_result = parser_fn_read.call(&read_args).unwrap();
+    // println!("read_result: {}", read_result[0].unwrap_i32());
+
+
+    return;
 
     /* ------------------------
      * rx core
