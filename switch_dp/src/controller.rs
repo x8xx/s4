@@ -5,7 +5,9 @@ use crate::config::*;
 use crate::dpdk::dpdk_memory;
 use crate::worker::*;
 use crate::fib::cache::*;
-use crate::fib::parser::*;
+use crate::fib::header;
+use crate::fib::parser;
+use serde::Deserialize;
 use wasmer_compiler_llvm::LLVM;
 
 fn allocate_core_to_worker(switch_config: &SwitchConfig,
@@ -35,8 +37,62 @@ fn allocate_core_to_worker(switch_config: &SwitchConfig,
 }
 
 
+
+#[derive(Deserialize)]
+struct DpConfig {
+    headers: HashMap<String, DpConfigHeader>
+}
+
+#[derive(Deserialize)]
+struct DpConfigHeader {
+    fields: Vec<u16>,
+    used_fields: Vec<u16>,
+}
+
+
+fn get_sample_dp_config_header() -> String {
+    "
+        {
+            \"headers\": {
+                \"ethernet\": {
+                    \"fields\": [48, 48, 16],
+                    \"used_fields\": []
+                },
+                \"ipv4\": {
+                    \"fields\": [4, 4, 8, 16, 16, 3, 13, 8, 8, 16, 32, 32],
+                    \"used_fields\": []
+                },
+                \"tcp\": {
+                    \"fields\": [16, 16, 32, 32, 4, 6, 6, 16 ,16, 16],
+                    \"used_fields\": []
+                },
+                \"udp\": {
+                    \"fields\": [16, 16, 16],
+                    \"used_fields\": []
+                }
+            }
+        }
+    ".to_string()
+}
+
+
 // main core
 pub fn controller_start(switch_config: &SwitchConfig) {
+    /* ------------------------
+     * Header
+     * --------------------------*/
+    let dp_config_json = get_sample_dp_config_header();
+    let dp_config: DpConfig = serde_json::from_str(&dp_config_json).unwrap();
+    let hdr_def_num = dp_config.headers.len();
+
+    let hdr_defs = dpdk_memory::malloc::<header::Header>("header_definitions".to_string(), hdr_def_num as u32);
+
+    for (i, hdr_conf) in dp_config.headers.iter().enumerate() {
+        unsafe {
+            *hdr_defs.offset(i as isize) = header::Header::new(*hdr_conf.0, &hdr_conf.1.fields, &hdr_conf.1.used_fields);
+        }
+    }
+
     /* ------------------------
      * parser
      * --------------------------*/
@@ -45,54 +101,33 @@ pub fn controller_start(switch_config: &SwitchConfig) {
     let mut parser_bin = vec![0;metadata.len() as usize];
     f.read(&mut parser_bin).unwrap();
 
-
-    let compiler = LLVM::default();
-    let parser_store = wasmer::Store::new(&wasmer::Universal::new(compiler).engine());
-
+    let llvm_compiler = LLVM::default();
+    let parser_store = wasmer::Store::new(&wasmer::Universal::new(llvm_compiler).engine());
     let parser_module = wasmer::Module::from_binary(&parser_store, &parser_bin).unwrap();
 
-    let mut test_array: Vec<u8> = Vec::new();
-    test_array.push(0);
-    test_array.push(1);
-    test_array.push(2);
-    test_array.push(3);
-    let test_array_ptr = test_array.as_ptr();
-    fn read(ptr: i64, offset: i32) -> i32 {
-        println!("ptr: {}", ptr);
-        unsafe {
-            (*(ptr as *const u8).offset(offset as isize)) as i32
-        }
-    }
-
-    let read_fn_store = wasmer::Store::default();
-    let memory_store = wasmer::Store::default();
-    let read_fn = wasmer::Function::new_native(&read_fn_store, read);
-    let linear_memory = wasmer::Memory::new(&memory_store, wasmer::MemoryType::new(1, None, false)).unwrap();
-
+    let parser_fn_pkt_read = wasmer::Function::new_native(&parser_store, parser::wasm_pkt_read);
+    let parser_fn_extract_header = wasmer::Function::new_native(&parser_store, parser::wasm_pkt_read);
+    let parser_linear_memory = wasmer::Memory::new(&parser_store, wasmer::MemoryType::new(1, None, false)).unwrap();
     let parser_import_object = wasmer::imports! {
         "env" => {
-            "read" => read_fn,
-            "__linear_memory" => linear_memory,
+            "pkt_read" => parser_fn_pkt_read,
+            "extract_header" => parser_fn_extract_header,
+            "__linear_memory" => parser_linear_memory,
         },
     };
-    // let parser_import_object = wasmer::imports! {};
 
-    let mut parser_instance = wasmer::Instance::new(&parser_module, &parser_import_object).unwrap();
-
-    // parser_instance.exports.insert("read2", read_fn);
-    for (name, ext) in parser_instance.exports.iter() {
-        println!("{}", name);
-    }
+    let parser_instance = wasmer::Instance::new(&parser_module, &parser_import_object).unwrap();
+    let fn_parse = parser_instance.exports.get_function("parse").unwrap();
 
 
-    let parser_fn_parse = parser_instance.exports.get_function("parse").unwrap();
-    let mut parser_args: Vec<wasmer::Value> = Vec::new();
-    parser_args.push(wasmer::Value::I64(test_array_ptr as i64));
-    parser_args.push(wasmer::Value::I32(10));
-    let parse_result = parser_fn_parse.call(&parser_args).unwrap();
-    println!("parse_result: {}", parse_result[0].unwrap_i32());
+    /* ------------------------
+     * pipeline
+     * --------------------------*/
+    let pipelines = dpdk_memory::malloc::<wasmer::Function>("pipelines".to_string(), 100);
+    
 
-    return;
+
+
 
     /* ------------------------
      * rx core
@@ -112,7 +147,8 @@ pub fn controller_start(switch_config: &SwitchConfig) {
 
     let mut rx_start_args = rx::RxStartArgs {
         if_name: &switch_config.if_name,
-        // parser: &parser,
+        hdrs,
+        parser: &fn_parse,
         l1_cache,
         lb_filter,
         fib_core_rings: &fib_core_rings,
