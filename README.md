@@ -32,3 +32,8 @@ rustup target add wasm32-wasi
 
 rustc -O --emit=obj --target wasm32-wasi parser.rs
 ```
+
+## e\_pktgen
+```
+cargo build && sudo ./target/debug/e_pktgen -c ../testdata/e_pketgen.yml -i test1
+```

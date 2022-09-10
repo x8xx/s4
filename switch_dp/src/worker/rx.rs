@@ -53,7 +53,6 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
     let mut random_next_core = 0;
 
     let mut parser_args: [wasmer::Value;3] = [wasmer::Value::I64(0), wasmer::Value::I32(0), wasmer::Value::I64(0)];
-    // let mut parser_args: [wasmer::Value;1] = [wasmer::Value::I64(0)];
     let packet_batch_num = 32;
     let parsed_hdrs = dpdk_memory::malloc::<*mut (u8, *mut Header)>("rx_parsed_hdrs".to_string(), packet_batch_num);
     for  i in 0..packet_batch_num {
@@ -70,6 +69,8 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
         size: 0,
     };
     let wasm_parser_args_ptr = &mut wasm_parser_args as *mut WasmParserArgs;
+
+
     println!("👍Rx Core Ready!");
 
     println!("🚀Launch Switch Port {}", if_name);
@@ -96,7 +97,11 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
                 _ => {},
             };
 
-            println!("check");
+            println!("check parsed hdr");
+            for j in 0..wasm_parser_args.size {
+                println!("base offset {}", unsafe { (*(*parsed_hdrs.offset(i as isize)).offset(j as isize)).0  });
+            }
+
             continue;
 
             let l1_key = &pkt[0..112];

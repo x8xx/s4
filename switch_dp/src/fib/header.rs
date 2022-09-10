@@ -2,7 +2,7 @@ use crate::dpdk::dpdk_memory;
 
 pub struct ParsedHeader {
     pub hdrs: *mut (*mut Header, u8),
-    pub pos: isize,
+    pub size: isize,
 }
 
 pub struct Header {
@@ -10,7 +10,7 @@ pub struct Header {
     pub used_fields: *const Field,
 }
 
-
+#[derive(Clone, Copy)]
 pub struct Field {
     pub start_byte_pos: usize,
     pub start_bit_mask: u8,
@@ -50,6 +50,7 @@ impl Header {
         }
     }
 }
+
 
 impl Field {
     pub fn new(pre_field: &Field, field_bit_size: u16) -> Self {
