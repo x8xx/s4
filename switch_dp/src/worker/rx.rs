@@ -25,11 +25,6 @@ fn next_core() -> usize {
 }
 
 
-fn create_l1_key(hdr_flag: i32) {
-
-}
-
-
 pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
     println!("😟Loading Rx Core");
     let rx_start_args = unsafe {&*transmute::<*mut c_void, *mut RxStartArgs>(rx_start_args_ptr)};
@@ -92,19 +87,22 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
             parser_args[2] = wasmer::Value::I64(wasm_parser_args_ptr as i64);
             let parse_result= parser.call(&parser_args);
             // println!("ok2");
-            match parse_result {
+            let parsed_byte =  match parse_result {
+                Ok(result) => result[0].unwrap_i32() as usize,
                 Err(_) => continue,
-                _ => {},
             };
 
-            println!("check parsed hdr");
+            if parsed_byte == 0 {
+                println!("continue");
+                continue;
+            }
+
+            println!("check parsed hdr {}", parsed_byte);
             for j in 0..wasm_parser_args.size {
                 println!("base offset {}", unsafe { (*(*parsed_hdrs.offset(i as isize)).offset(j as isize)).0  });
             }
 
-            continue;
-
-            let l1_key = &pkt[0..112];
+            let l1_key = &pkt[0..parsed_byte];
             let l1_hash = murmurhash3::murmurhash3_x86_32(l1_key, 1);
             println!("l1_hash {}", l1_hash);
             // match l1_cache[l1_hash as usize].compare_key(l1_key) {
@@ -112,6 +110,10 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
             //     Some(u8) => continue,
             //     None => 0,
             // };
+
+
+            continue;
+
 
             let l2_key = &pkt[0..112];
             let l2_hash = murmurhash3::murmurhash3_x86_32(l2_key, 1);
