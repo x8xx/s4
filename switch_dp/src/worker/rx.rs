@@ -1,6 +1,7 @@
 use std::ffi::c_void;
 use std::mem::transmute;
 use std::ptr::null_mut;
+use std::slice::from_raw_parts_mut;
 use crate::fib::*;
 use crate::fib::header::Header;
 use crate::fib::parser::WasmParserArgs;
@@ -11,11 +12,17 @@ use crate::dpdk::dpdk_eth;
 #[repr(C)]
 pub struct RxStartArgs<'a> {
     pub if_name: &'a str,
+
     pub hdrs: *const Header,
     pub hdrs_len: u32,
     pub parser: &'a wasmer::Function,
-    pub l1_cache: *mut u8,
+
+    pub l1_cache: *const u8,
+    pub l1_cache_key: *const u8,
+    pub l1_key_max_len: u32,
+
     pub lb_filter: *mut u8,
+
     pub fib_core_rings: &'a [dpdk_memory::Ring],
 }
 
@@ -34,8 +41,12 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
     let hdrs_len = rx_start_args.hdrs_len;
     let parser = rx_start_args.parser;
 
-    let l1_cache = &rx_start_args.l1_cache;
+    let l1_cache = rx_start_args.l1_cache;
+    let l1_cache_key = rx_start_args.l1_cache_key;
+    let l1_key_max_len = rx_start_args.l1_key_max_len;
+
     let lb_filter = &rx_start_args.lb_filter;
+
     let fib_core_rings = &rx_start_args.fib_core_rings;
 
     println!("create mbuf");
@@ -45,9 +56,7 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
     println!("create pktprocessor");
     let pp = dpdk_eth::PktProcessor::new(port_number);
 
-    let mut random_next_core = 0;
 
-    let mut parser_args: [wasmer::Value;3] = [wasmer::Value::I64(0), wasmer::Value::I32(0), wasmer::Value::I64(0)];
     let packet_batch_num = 32;
     let parsed_hdrs = dpdk_memory::malloc::<*mut (u8, *mut Header)>("rx_parsed_hdrs".to_string(), packet_batch_num);
     for  i in 0..packet_batch_num {
@@ -65,6 +74,13 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
     };
     let wasm_parser_args_ptr = &mut wasm_parser_args as *mut WasmParserArgs;
 
+    let mut random_next_core = 0;
+    let mut parser_args: [wasmer::Value;3] = [wasmer::Value::I64(0), wasmer::Value::I32(0), wasmer::Value::I64(0)];
+
+
+    // tmp memory
+    let l2_cache_key_mem_ptr = dpdk_memory::malloc::<u8>("l2_key_rx_mem".to_string(), l1_key_max_len);
+    let l2_key = unsafe { from_raw_parts_mut(l2_cache_key_mem_ptr, l1_key_max_len as usize) };
 
     println!("👍Rx Core Ready!");
 
@@ -86,7 +102,6 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
             parser_args[1] = wasmer::Value::I32(pkt.len() as i32);
             parser_args[2] = wasmer::Value::I64(wasm_parser_args_ptr as i64);
             let parse_result= parser.call(&parser_args);
-            // println!("ok2");
             let parsed_byte =  match parse_result {
                 Ok(result) => result[0].unwrap_i32() as usize,
                 Err(_) => continue,
@@ -103,8 +118,13 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
             }
 
             let l1_key = &pkt[0..parsed_byte];
-            let l1_hash = murmurhash3::murmurhash3_x86_32(l1_key, 1);
+            let l1_hash = murmurhash3::murmurhash3_x86_32(l1_key, 1) >> 16;
             println!("l1_hash {}", l1_hash);
+            if cache::key_compare_slice_pointer(l1_key, l1_cache_key as *const u8, (l1_hash * l1_key_max_len) as isize) {
+                // next core (push ring)
+                continue;
+            }
+            // l1_cache.offset(l1_hash as isize)
             // match l1_cache[l1_hash as usize].compare_key(l1_key) {
             // match l1_cache[0].compare_key(l1_key) {
             //     Some(u8) => continue,
@@ -112,16 +132,36 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
             // };
 
 
+            
+            let parsed_hdr = unsafe { *parsed_hdrs.offset(i as isize) };
+            let mut l2_key_pos = 0;
+            for j in 0..wasm_parser_args.size {
+                unsafe {
+                    let hdr_base_offset = (*parsed_hdr.offset(j)).0;
+                    let used_fields = (*(*parsed_hdr.offset(j)).1).used_fields;
+                    let used_fields_len = (*(*parsed_hdr.offset(j)).1).used_fields_len;
+                    for k in 0..used_fields_len {
+                        let field = *used_fields.offset(k);
+                        l2_key[l2_key_pos] =  pkt[hdr_base_offset as usize + field.start_byte_pos] ^ field.start_bit_mask;
+                        l2_key_pos += 1;
+                        if field.start_byte_pos != field.end_byte_pos {
+                            for l in field.start_byte_pos+1..field.end_byte_pos {
+                                l2_key[l2_key_pos] = pkt[hdr_base_offset as usize + k as usize];
+                                l2_key_pos += 1;
+                            } 
+                            l2_key[l2_key_pos] =  pkt[hdr_base_offset as usize + field.end_byte_pos] ^ field.end_bit_mask;
+                            l2_key_pos += 1;
+                        }
+                    }
+                }
+            }
+
+            let l2_hash = murmurhash3::murmurhash3_x86_32(l2_key, 1) >> 16;
+            println!("l2_hash {}", l2_hash);
+            let core_flag = unsafe { lb_filter.offset(l2_hash as isize) };
+
             continue;
 
-
-            let l2_key = &pkt[0..112];
-            let l2_hash = murmurhash3::murmurhash3_x86_32(l2_key, 1);
-            println!("l2_hash {}", l2_hash);
-            // let core_flag = lb_filter[l2_hash as usize];
-
-            // rx_start_args.lb_filter[0] = 0xff;
-            // lb_filter[0] = 0xff;
             unsafe {
                 let bit_count = core::arch::x86_64::_popcnt64(0xff as i64);
                 println!("bit count {}", bit_count);

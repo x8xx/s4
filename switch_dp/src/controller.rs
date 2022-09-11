@@ -131,13 +131,12 @@ pub fn controller_start(switch_config: &SwitchConfig) {
     let pipelines = dpdk_memory::malloc::<wasmer::Function>("pipelines".to_string(), 100);
     
 
-
     /* ------------------------
      * rx core (load balancer)
      * --------------------------*/
     let l1_cache_len = 65535;
     let l1_cache = dpdk_memory::malloc::<u8>("l1_cache".to_string(), l1_cache_len);
-    let l1_key_max_len = 48;
+    let l1_key_max_len = 64;
     let l1_cache_key = dpdk_memory::malloc::<u8>("l1_key".to_string(), l1_cache_len * l1_key_max_len);
 
     let lb_filter_len = 65535;
@@ -153,6 +152,8 @@ pub fn controller_start(switch_config: &SwitchConfig) {
         hdrs_len: hdr_def_num as u32,
         parser: fn_parse,
         l1_cache,
+        l1_cache_key,
+        l1_key_max_len,
         lb_filter,
         fib_core_rings: &fib_core_rings,
     };
@@ -175,8 +176,8 @@ pub fn controller_start(switch_config: &SwitchConfig) {
     allocate_core_to_worker(switch_config, &mut rx_start_args, &mut fib_start_args);
 
 
+    // run tcp
     loop {
 
     }
-    // run tcp
 }

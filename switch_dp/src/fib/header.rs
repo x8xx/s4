@@ -8,6 +8,8 @@ pub struct ParsedHeader {
 pub struct Header {
     pub fields: *const Field,
     pub used_fields: *const Field,
+    pub fields_len: isize,
+    pub used_fields_len: isize,
 }
 
 #[derive(Clone, Copy)]
@@ -47,6 +49,8 @@ impl Header {
         Header {
             fields,
             used_fields,
+            fields_len: raw_fields.len() as isize,
+            used_fields_len: raw_used_fields.len() as isize,
         }
     }
 }

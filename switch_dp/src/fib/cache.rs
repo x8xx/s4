@@ -1,11 +1,26 @@
 use crate::dpdk::dpdk_memory;
 
 // pub struct CacheElement<'a> {
-pub struct CacheElement<T> {
-    // key: &'a mut [u8],
-    // key_len: u8,
-    action_id: T,
+// pub struct CacheElement<T> {
+//     // key: &'a mut [u8],
+//     // key_len: u8,
+//     action_id: T,
+// }
+
+pub fn key_compare_slice_pointer(slice_key: &[u8], pointer_key: *const u8, offset: isize) -> bool {
+    for (i, byte) in slice_key.iter().enumerate() {
+        unsafe {
+            if *byte != *pointer_key.offset(offset) {
+                return false;
+            }
+        }
+    }
+    true
 }
+
+// pub fn create_key(key: &mut [u8], offset: usize, value: u8) -> usize {
+
+// }
 
 // impl<T> CacheElement<T> {
 //     pub fn compare_key() {
