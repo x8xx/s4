@@ -124,13 +124,6 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
                 // next core (push ring)
                 continue;
             }
-            // l1_cache.offset(l1_hash as isize)
-            // match l1_cache[l1_hash as usize].compare_key(l1_key) {
-            // match l1_cache[0].compare_key(l1_key) {
-            //     Some(u8) => continue,
-            //     None => 0,
-            // };
-
 
             
             let parsed_hdr = unsafe { *parsed_hdrs.offset(i as isize) };
@@ -159,13 +152,19 @@ pub extern "C" fn rx_start(rx_start_args_ptr: *mut c_void) -> i32 {
             let l2_hash = murmurhash3::murmurhash3_x86_32(l2_key, 1) >> 16;
             println!("l2_hash {}", l2_hash);
             let core_flag = unsafe { lb_filter.offset(l2_hash as isize) };
+            // unsafe {
+            //     let bit_count = core::arch::x86_64::_popcnt64(0xff as i64);
+            //     println!("bit count {}", bit_count);
+            //
+            // }
 
-            continue;
 
-            unsafe {
-                let bit_count = core::arch::x86_64::_popcnt64(0xff as i64);
-                println!("bit count {}", bit_count);
+            for i in 0..14 {
+                print!("{:x} ", pkt[i]);
             }
+            println!("");
+            println!("chalange {:p} {}", pkt.as_ptr(), fib_core_rings[0].enqueue::<u8>(pkt.as_ptr() as *mut u8));
+            // return 0;
 
         }
         // pp.tx();

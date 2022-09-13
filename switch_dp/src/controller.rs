@@ -11,10 +11,11 @@ use wasmer_compiler_llvm::LLVM;
 
 fn allocate_core_to_worker(switch_config: &SwitchConfig,
                             rx_start_args: &mut rx::RxStartArgs,
-                            fib_start_args: &mut fib::FibStartArgs) -> bool {
+                            fib_start_args_list: &mut Vec<fib::FibStartArgs>) -> bool {
     let mut unallocated_rx_core = switch_config.rx_cores;
     let mut unallocated_fib_core = switch_config.fib_cores;
     unsafe {
+        let mut fib_core_id = 0;
         let mut lcore_id: u32 = dpdk_sys::rte_get_next_lcore(u32::MIN, 1, 0);
         while lcore_id < dpdk_sys::RTE_MAX_LCORE {
             if unallocated_rx_core > 0 {
@@ -23,9 +24,10 @@ fn allocate_core_to_worker(switch_config: &SwitchConfig,
                 }
                 unallocated_rx_core -= 1;
             } else if unallocated_fib_core > 0 {
-                if !remote_launch_fib(lcore_id, fib_start_args) {
+                if !remote_launch_fib(lcore_id, &mut fib_start_args_list[fib_core_id]) {
                     panic!("Failed start fib worker");
                 }
+                fib_core_id += 1;
                 unallocated_fib_core -= 1;
             }
             lcore_id = dpdk_sys::rte_get_next_lcore(lcore_id, 1, 0);
@@ -142,9 +144,11 @@ pub fn controller_start(switch_config: &SwitchConfig) {
     let lb_filter_len = 65535;
     let lb_filter = dpdk_memory::malloc::<u8>("lb_filter".to_string(), lb_filter_len);
 
+    // let fib_core_ring_size = 4096;
+    let fib_core_ring_size = 65536;
     let mut fib_core_rings = Vec::new();
-    fib_core_rings.push(dpdk_memory::Ring::new("fib1", 4096));
-    fib_core_rings.push(dpdk_memory::Ring::new("fib2", 4096));
+    fib_core_rings.push(dpdk_memory::Ring::new("fib1", fib_core_ring_size));
+    fib_core_rings.push(dpdk_memory::Ring::new("fib2", fib_core_ring_size));
 
     let mut rx_start_args = rx::RxStartArgs {
         if_name: &switch_config.if_name,
@@ -162,9 +166,15 @@ pub fn controller_start(switch_config: &SwitchConfig) {
     /* ------------------------
      * cache core
      * --------------------------*/
-    let mut fib_start_args =fib::FibStartArgs {
-
-    };
+    let mut fib_start_args_list = Vec::new();
+    fib_start_args_list.push(fib::FibStartArgs {
+        fib_core_ring: &fib_core_rings[0],
+        core_id: 0,
+    });
+    fib_start_args_list.push(fib::FibStartArgs {
+        fib_core_ring: &fib_core_rings[1],
+        core_id: 1,
+    });
 
 
     /* ------------------------
@@ -173,7 +183,7 @@ pub fn controller_start(switch_config: &SwitchConfig) {
 
 
 
-    allocate_core_to_worker(switch_config, &mut rx_start_args, &mut fib_start_args);
+    allocate_core_to_worker(switch_config, &mut rx_start_args, &mut fib_start_args_list);
 
 
     // run tcp

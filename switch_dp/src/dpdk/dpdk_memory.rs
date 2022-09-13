@@ -28,17 +28,17 @@ impl Ring {
 
     }
 
-    pub fn enqueue<T>(&self, receive_obj: &mut T) -> i32 {
+    pub fn enqueue<T>(&self, obj: *mut T) -> i32 {
         unsafe {
             // dpdk_sys::rte_ring_enqueue_burst(self.rte_ring, receive_ptr, obj_len, null_mut())
-            dpdk_sys::rte_ring_mp_enqueue(self.rte_ring, receive_obj as *mut T as *mut c_void)
+            dpdk_sys::rte_ring_mp_enqueue(self.rte_ring, obj as *mut c_void)
         }
     }
 
 
-    pub fn dequeue<T>(&self, obj: &mut T) -> i32 {
+    pub fn dequeue<T>(&self, obj: *mut *mut T) -> i32 {
         unsafe {
-            dpdk_sys::rte_ring_mc_dequeue(self.rte_ring, obj as *mut T as *mut *mut c_void)
+            dpdk_sys::rte_ring_mc_dequeue(self.rte_ring, obj as *mut *mut c_void)
         }
     }
 }
