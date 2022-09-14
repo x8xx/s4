@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
+use std::thread;
+use std::io::Error;
+use std::net::TcpListener;
+use std::net::TcpStream;
 use crate::config::*;
 use crate::dpdk::dpdk_memory;
 use crate::worker::*;
@@ -74,6 +78,19 @@ fn get_sample_dp_config_header() -> String {
             }
         }
     ".to_string()
+}
+
+
+fn handler(mut stream: TcpStream) -> Result<(), Error> {
+    let mut buffer = [0; 1024];
+    loop {
+        let nbytes = stream.read(&mut buffer)?;
+        if nbytes == 0 {
+            return Ok(());
+        }
+        stream.write(&buffer[..nbytes])?;
+        stream.flush()?;
+    }
 }
 
 
@@ -182,12 +199,27 @@ pub fn controller_start(switch_config: &SwitchConfig) {
      * --------------------------*/
 
 
-
     allocate_core_to_worker(switch_config, &mut rx_start_args, &mut fib_start_args_list);
 
 
+    let server_address = "127.0.0.1:8888";
     // run tcp
-    loop {
-
+    println!("🚀Launch DP Server  {}", server_address);
+    let listener = TcpListener::bind(server_address).expect("failed to start dp server");
+    for streams in listener.incoming() {
+        match streams {
+            // Err(e) => {},
+            Err(_) => {println!("error");},
+            Ok(stream) => {
+                println!("");
+                println!("Start Stream {}", server_address);
+                println!("");
+                thread::spawn(move || {
+                    handler(stream).unwrap_or_else(|error| eprintln!("{:?}", error));
+                });
+            }
+        }
     }
+
+
 }
