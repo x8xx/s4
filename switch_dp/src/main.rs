@@ -13,7 +13,7 @@ fn main() {
     let switch_config = config::parse_switch_args(switch_args);
 
     // controller start (main core)
-    controller::controller_start(&switch_config);
+    controller::start_controller(&switch_config);
 
     dpdk::dpdk::cleanup();
 }
