@@ -3,6 +3,11 @@ name = "switch_dp"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["dpdk", "wasmer"]
+dpdk = []
+wasmer = []
+
 [dependencies]
 rust-dpdk-sys = { git = "https://github.com/x8xx/rust-dpdk.git", rev = "3c72af1a8c1549105c1112285ebba4feaca0a4b5" }
 getopts = "0.2.19"
@@ -12,3 +17,4 @@ wasmer-compiler-llvm = "2.3.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 yaml-rust = "0.4.5"
+uuid = { version = "1.1.2", features = ["fast-rng", "v4"] }
