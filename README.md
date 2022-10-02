@@ -14,8 +14,10 @@ LLVM 12
 dpdk-devbind.py -b uio_pci_generic 0000:0x:00.0
 
 # setup hugepages
-echo 1 > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
-dpdk-hugepages.py --setup 1G
+
+dpdk-hugepages.py -p 1G --setup 2G
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+# 2
 
 ```
 
