@@ -28,6 +28,7 @@ impl<T> Array<T> {
 
     pub fn free(self) {
         unsafe {
+            dpdk_sys::rte_memzone_free(self.memzone);
         }
     }
 }
