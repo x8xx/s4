@@ -5,6 +5,7 @@ use std::mem::size_of;
 pub struct Array<T> {
     data: *mut T,
     memzone: *const dpdk_sys::rte_memzone,
+    len: usize,
 }
 
 impl<T> Array<T> {
@@ -23,7 +24,16 @@ impl<T> Array<T> {
         Array {
             data,
             memzone,
+            len,
         }
+    }
+
+    pub fn as_ptr(&self) -> *mut T {
+        self.data
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
     }
 
     pub fn free(self) {

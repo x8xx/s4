@@ -1,6 +1,7 @@
 use std::ffi::CStr;
 use std::ptr::null_mut;
 use crate::core::helper::dpdk::gen_random_name;
+use crate::core::network::pktbuf;
 
 pub struct Interface {
     port_number: u16,
@@ -76,7 +77,13 @@ impl Interface {
         }
     }
 
-    pub fn get_port_number(&self) -> u16 {
-        self.port_number
+    pub fn rx(&self, pktbuf: &pktbuf::PktBuf) {
+        unsafe {
+            dpdk_sys::rte_eth_rx_burst(self.port_number, 0, pktbuf.bufs.as_ptr(),  pktbuf.bufs.len() as u16);
+        }
+    }
+
+    pub fn tx() {
+
     }
 }
