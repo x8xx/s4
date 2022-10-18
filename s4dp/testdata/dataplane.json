@@ -1,0 +1,21 @@
+{
+    "headers": {
+        "ethernet": {
+            "fields": [48, 48, 16],
+            "used_fields": [0, 1, 2]
+        },
+        "ipv4": {
+            "fields": [4, 4, 8, 16, 16, 3, 13, 8, 8, 16, 32, 32],
+            "used_fields": [9, 10, 11]
+        },
+        "tcp": {
+            "fields": [16, 16, 32, 32, 4, 6, 6, 16 ,16, 16],
+            "used_fields": [0, 1]
+        },
+        "udp": {
+            "fields": [16, 16, 16],
+            "used_fields": [0, 1]
+        }
+    },
+    "tables": []
+}

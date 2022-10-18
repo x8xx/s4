@@ -1,9 +1,14 @@
 use std::fs;
+use std::io::Read;
+use std::collections::HashMap;
 use getopts::Options;
 use yaml_rust::YamlLoader;
+use serde::Deserialize;
 
 pub struct SwitchConfig {
-    pub parser_path: String,
+    pub dataplane: DpConfig,
+    pub parser_wasm: Vec<u8>,
+    pub pipeline_wasm: Vec<u8>,
     pub listen_address: String,
     pub pipeline_core_num: u8,
     pub interface_configs: Vec<InterfaceConfig>,
@@ -14,24 +19,71 @@ pub struct InterfaceConfig {
     pub cache_core_num: u8,
 }
 
+
+#[derive(Deserialize)]
+pub struct DpConfig {
+    pub headers: HashMap<String, DpConfigHeader>,
+    pub tables: Vec<DpConfigTable>,
+}
+
+#[derive(Deserialize)]
+pub struct DpConfigHeader {
+    pub fields: Vec<u16>,
+    pub used_fields: Vec<u16>,
+}
+
+#[derive(Deserialize)]
+pub struct DpConfigTable {
+
+}
+
+
 const GENERAL_CONFIG_KEY: &str = "general";
 const INTERFACES_CONFIG_KEY: &str = "interfaces";
 
 pub fn parse_switch_args(args: &[String]) -> SwitchConfig {
+    // getopts
     let mut opts = Options::new();
     opts.optopt("c", "config", "yaml switch config path", "");
 
     let matches = opts.parse(args).unwrap();
     let config_path: String = matches.opt_get::<String>("c").unwrap().unwrap();
 
+    // yaml_rust load config
     let yaml_configs = YamlLoader::load_from_str(&fs::read_to_string(config_path).unwrap().to_string()).unwrap();
-    // let yaml_config = YamlLoader::load_from_str(&fs::read_to_string(config_path).unwrap().to_string()).unwrap()[0];
     let yaml_config = &yaml_configs[0];
     let yaml_config_general = &yaml_config[GENERAL_CONFIG_KEY];
     let yaml_config_interfaces = &yaml_config[INTERFACES_CONFIG_KEY];
 
-    let parser_path = yaml_config_general["parser_path"].clone().into_string().unwrap();
-    let listen_address = yaml_config_general["listen_address"].clone().into_string().unwrap();
+
+    // dataplane config
+    let dataplane_json_path = get_string_from_yaml_value(yaml_config_general, "dataplane_config_path");
+    let dataplane_json = fs::read_to_string(dataplane_json_path).unwrap();
+    let dataplane: DpConfig = serde_json::from_str(&dataplane_json).unwrap();
+
+
+    // parser wasm
+    let parser_wasm_path= get_string_from_yaml_value(yaml_config_general, "parser_wasm_path");
+    let parser_wasm = {
+        let mut f = fs::File::open(&parser_wasm_path).unwrap();
+        let metadata = std::fs::metadata(&parser_wasm_path).unwrap();
+        let mut parser_wasm = vec![0;metadata.len() as usize];
+        f.read(&mut parser_wasm).unwrap();
+        parser_wasm
+    };
+
+    // pipeline wasm
+    let pipeline_wasm_path= get_string_from_yaml_value(yaml_config_general, "pipeline_wasm_path");
+    let pipeline_wasm = {
+        let mut f = fs::File::open(&pipeline_wasm_path).unwrap();
+        let metadata = std::fs::metadata(&pipeline_wasm_path).unwrap();
+        let mut pipeline_wasm = vec![0;metadata.len() as usize];
+        f.read(&mut pipeline_wasm).unwrap();
+        pipeline_wasm
+    };
+
+
+    let listen_address = get_string_from_yaml_value(yaml_config_general, "listen_address");
     let pipeline_core_num = yaml_config_general["pipeline_core_num"].clone().as_i64().unwrap() as u8;
 
     let mut interface_configs = Vec::new();
@@ -43,9 +95,16 @@ pub fn parse_switch_args(args: &[String]) -> SwitchConfig {
     }
 
     SwitchConfig {
-        parser_path,
+        dataplane,
+        parser_wasm,
+        pipeline_wasm,
         listen_address,
         pipeline_core_num,
         interface_configs
     }
+}
+
+
+fn get_string_from_yaml_value(yaml: &yaml_rust::Yaml, key: &str) -> String {
+    return yaml[key].clone().into_string().unwrap();
 }

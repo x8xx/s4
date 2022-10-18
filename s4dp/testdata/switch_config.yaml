@@ -1,0 +1,9 @@
+general:
+  dataplane_config_path: "./testdata/dataplane.json"
+  parser_wasm_path: "../wasm/parser/parser.wasm"
+  pipeline_wasm_path: "../wasm/pipeline/pipeline.wasm" 
+  listen_address: "127.0.0.1:8888"
+  pipeline_core_num: 2
+interfaces:
+  net_tap0:
+    cache_core_num: 2
