@@ -1,10 +1,10 @@
-// mod dpdk;
 mod core;
 mod config;
-// mod controller;
+mod controller;
 // mod worker;
 // mod cache;
 // mod fib;
+
 use std::env;
 
 
@@ -16,8 +16,7 @@ fn main() {
     let switch_args: &[String] = &args[switch_args_start_index as usize..];
     let switch_config = config::parse_switch_args(switch_args);
     
-    // controller start (main core)
-    // controller::start_controller(&switch_config);
+    controller::start_controller(&switch_config);
 
     #[cfg(feature="dpdk")]
     core::helper::dpdk::cleanup();
