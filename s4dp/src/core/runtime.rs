@@ -1,4 +1,2 @@
-#[cfg(feature="wasmer")]
-pub mod wasmer;
-#[cfg(feature="wasmer")]
-pub use self::wasmer::*;
+#[cfg(feature="runtime_wasm")]
+pub mod wasm;

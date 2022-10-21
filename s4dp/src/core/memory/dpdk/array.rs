@@ -1,6 +1,7 @@
 use std::ops::Index;
 use std::ops::IndexMut;
 use std::mem::size_of;
+use std::slice::from_raw_parts_mut;
 
 pub struct Array<T> {
     data: *mut T,
@@ -34,6 +35,13 @@ impl<T> Array<T> {
 
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn as_slice(&self) -> &mut [T] {
+        unsafe {
+            from_raw_parts_mut::<T>(self.data, self.len)
+        }
+
     }
 
     pub fn free(self) {

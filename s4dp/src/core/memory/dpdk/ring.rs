@@ -51,7 +51,7 @@ impl Ring {
 }
 
 
-struct RingBuf<T> {
+pub struct RingBuf<T> {
     phantom: PhantomData<T>,
     mempool: *mut dpdk_sys::rte_mempool,
 }
@@ -93,4 +93,19 @@ impl<T> RingBuf<T> {
             dpdk_sys::rte_mempool_put_bulk(self.mempool, obj_ptr as *const *mut c_void, len as u32);
         }
     }
+
+    pub fn one_malloc<'a>(&'a self) -> &'a mut  T {
+        unsafe {
+            let mut obj_ptr: *mut T = null_mut();
+            dpdk_sys::rte_mempool_get(self.mempool, &mut obj_ptr as *mut *mut T as *mut *mut c_void);
+            &mut *obj_ptr as &mut T
+        }
+    }
+
+    pub fn one_free(&self, obj: &mut T) {
+        unsafe {
+            dpdk_sys::rte_mempool_put(self.mempool, obj as *mut T as *mut c_void);
+        }
+    }
+
 }

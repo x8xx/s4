@@ -1,4 +1,3 @@
-use std::ptr::null_mut;
 use crate::core::memory::array;
 
 pub struct PktBuf {
@@ -20,5 +19,9 @@ impl PktBuf {
 
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn free(&self) {
+
     }
 }
