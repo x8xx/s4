@@ -4,9 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["dpdk", "wasmer"]
+default = ["dpdk", "runtime_wasm", "wasm_wasmer"]
 dpdk = []
-wasmer = []
+runtime_wasm = []
+wasm_wasmer = []
 
 [dependencies]
 rust-dpdk-sys = { git = "https://github.com/x8xx/rust-dpdk.git", rev = "3c72af1a8c1549105c1112285ebba4feaca0a4b5" }

@@ -1,5 +1,6 @@
 use std::ops::Index;
 use std::ops::IndexMut;
+use std::iter::Iterator;
 use std::mem::size_of;
 use std::slice::from_raw_parts_mut;
 
@@ -7,6 +8,7 @@ pub struct Array<T> {
     data: *mut T,
     memzone: *const dpdk_sys::rte_memzone,
     len: usize,
+    iter_pos: isize,
 }
 
 impl<T> Array<T> {
@@ -26,6 +28,7 @@ impl<T> Array<T> {
             data,
             memzone,
             len,
+            iter_pos: 0,
         }
     }
 
@@ -68,4 +71,18 @@ impl<T> IndexMut<usize> for Array<T> {
             &mut *self.data.offset(i as isize) as &mut T
         }
     }
+}
+
+impl<T> Iterator for Array<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        if self.iter_pos == self.len {
+            return None;
+        }
+        let obj = unsafe { *self.data.offset(self.iter_pos) };
+        self.iter_pos += 1;
+        Some(obj)
+    }
+
 }

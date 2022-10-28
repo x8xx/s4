@@ -80,21 +80,21 @@ impl<T> RingBuf<T> {
         }
     }
 
-    pub fn malloc(&self, obj: &mut [&T], len: usize) {
+    pub fn malloc_bulk(&self, obj: &mut [&T], len: usize) {
         unsafe {
             let obj_ptr = obj as *mut [&T] as *mut *mut T;
             dpdk_sys::rte_mempool_get_bulk(self.mempool, obj_ptr as *mut *mut c_void, len as u32);
         }
     }
 
-    pub fn free(&self, obj: &[&T], len: usize) {
+    pub fn free_bulk(&self, obj: &[&T], len: usize) {
         unsafe {
             let obj_ptr = obj as *const [&T] as *const *mut T;
             dpdk_sys::rte_mempool_put_bulk(self.mempool, obj_ptr as *const *mut c_void, len as u32);
         }
     }
 
-    pub fn one_malloc<'a>(&'a self) -> &'a mut  T {
+    pub fn malloc<'a>(&'a self) -> &'a mut  T {
         unsafe {
             let mut obj_ptr: *mut T = null_mut();
             dpdk_sys::rte_mempool_get(self.mempool, &mut obj_ptr as *mut *mut T as *mut *mut c_void);
@@ -102,7 +102,7 @@ impl<T> RingBuf<T> {
         }
     }
 
-    pub fn one_free(&self, obj: &mut T) {
+    pub fn free(&self, obj: &mut T) {
         unsafe {
             dpdk_sys::rte_mempool_put(self.mempool, obj as *mut T as *mut c_void);
         }
