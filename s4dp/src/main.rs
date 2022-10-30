@@ -1,12 +1,12 @@
 mod core;
 mod config;
 mod controller;
+mod parser;
+mod cache;
+mod pipeline;
 // mod worker;
-// mod cache;
-// mod fib;
 
 use std::env;
-
 
 fn main() {
     #[cfg(feature="dpdk")]
