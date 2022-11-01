@@ -21,10 +21,17 @@ cat /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
 
 ```
 
-## switch\_dp
+## Data Plane
 ```
-cd ./s4dp
-cargo build && sudo ./target/debug/switch_dp -c 0xf --vdev=net_tap0,iface=test1 -- --rx-cores 1 --fib-cores 2 -i net_tap0 -p ../wasm/parser/parser.wasm
+cd ./dplane
+cargo build --verbose && sudo ./target/debug/switch_dp -c 0xf --vdev=net_tap0,iface=test1 -- -c ./testdata/switch_config.yaml
+```
+
+## Control Plane
+```
+cd ./cplane
+go run main.go
+
 ```
 
 ## wasm
