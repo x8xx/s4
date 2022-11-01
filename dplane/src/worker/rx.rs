@@ -10,7 +10,7 @@ use crate::parser::parser::Parser;
 #[repr(C)]
 pub struct RxArgs<'a> {
     pub name: String,
-    pub parser: &'a Parser<'a>,
+    pub parser: Parser<'a>,
 }
 
 pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
@@ -23,14 +23,14 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     
     loop {
         interface.rx(&pktbuf);
-        for i in 0..pktbuf_len {
-            let (pkt, pkt_len) = pktbuf.get_raw_pkt(i);
-            // let parse_result = rx_args.parser.parse(pkt, pkt_len);
-            // match parse_result {
-            //     None => continue,
-            //     _ => {},
-            // }
-        }
+        // for i in 0..pktbuf_len {
+        //     let (pkt, pkt_len) = pktbuf.get_raw_pkt(i);
+        //     // let parse_result = rx_args.parser.parse(pkt, pkt_len);
+        //     // match parse_result {
+        //     //     None => continue,
+        //     //     _ => {},
+        //     // }
+        // }
     }
     0
 }

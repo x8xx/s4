@@ -18,10 +18,9 @@ use crate::worker::rx;
 
 
 struct DataPlaneDB<'a> {
-    headers: array::Array<header::Header>,
-    interface_db_list: array::Array<InterfaceDB<'a>>,
-    // parsed_hdr_list: array::Array<array::Array<(&'a header::Header, usize)>>,
-    // parser: parser::Parser,
+    header_list: array::Array<header::Header>,
+    // interface_db_list: array::Array<InterfaceDB<'a>>,
+    rx_args_list: array::Array< rx::RxArgs<'a>>,
 }
 
 struct InterfaceDB<'a> {
@@ -43,33 +42,42 @@ fn init_dataplane_db(switch_config: &SwitchConfig) -> DataPlaneDB {
 
     // gen hdr_list
     let hdr_confs = &dp_config.headers;
-    let mut headers: array::Array<header::Header> = array::Array::<header::Header>::new(hdr_confs.len());
+    let mut header_list: array::Array<header::Header> = array::Array::<header::Header>::new(hdr_confs.len());
     for (i, hdr_conf) in hdr_confs.iter().enumerate() {
-        headers.write(i, header::Header::new(&hdr_conf.fields, &hdr_conf.used_fields));
+        header_list.write(i, header::Header::new(&hdr_conf.fields, &hdr_conf.used_fields));
     }
 
-    let mut interface_db_list = array::Array::<InterfaceDB>::new(switch_config.interface_configs.len());
+    // gen parser
+    let mut rx_args_list = array::Array::<rx::RxArgs>::new(switch_config.interface_configs.len());
     for (i, interface_conf) in switch_config.interface_configs.iter().enumerate() {
-        interface_db_list.write(i, InterfaceDB {
+        rx_args_list.write(i, rx::RxArgs {
             name: (&interface_conf.if_name).to_string(),
             parser: parser::Parser::new(&switch_config.parser_wasm, 512, hdr_confs.len()),
         })
     }
+    // let mut interface_db_list = array::Array::<InterfaceDB>::new(switch_config.interface_configs.len());
+    // for (i, interface_conf) in switch_config.interface_configs.iter().enumerate() {
+    //     interface_db_list.write(i, InterfaceDB {
+    //         name: (&interface_conf.if_name).to_string(),
+    //         parser: parser::Parser::new(&switch_config.parser_wasm, 512, hdr_confs.len()),
+    //     })
+    // }
 
     DataPlaneDB {
-        headers,
-        interface_db_list,
+        header_list,
+        // interface_db_list,
+        rx_args_list,
     }
 }
 
 
-fn start_workers(dp_db: &DataPlaneDB) {
-    for i in 0..dp_db.interface_db_list.len() {
-        let mut rx_args = rx::RxArgs {
-            name: dp_db.interface_db_list[i].name.to_string(),
-            parser: &dp_db.interface_db_list[i].parser,
-        };
-        spawn(rx::start_rx, &mut rx_args as *mut rx::RxArgs as *mut c_void);
+fn start_workers(dp_db: &mut DataPlaneDB) {
+    for i in 0..dp_db.rx_args_list.len() {
+        // let mut rx_args = rx::RxArgs {
+        //     name: dp_db.interface_db_list[i].name.to_string(),
+        //     parser: &dp_db.interface_db_list[i].parser,
+        // };
+        spawn(rx::start_rx, &mut dp_db.rx_args_list[i] as *mut rx::RxArgs as *mut c_void);
     }
 }
 
@@ -94,10 +102,10 @@ fn cp_stream_handler(mut stream: TcpStream) -> Result<(), Error> {
 // main core
 pub fn start_controller(switch_config: &SwitchConfig) {
     println!("init dataplane db");
-    let dp_db = init_dataplane_db(switch_config);
+    let mut dp_db = init_dataplane_db(switch_config);
 
     println!("start workers");
-    start_workers(&dp_db);
+    start_workers(&mut dp_db);
 
     // let dp_db_arc = Arc::new(dp_db);
     // let dp_db_ptr = &mut dp_db as *mut DataPlaneDB;
