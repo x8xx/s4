@@ -79,15 +79,15 @@ impl Interface {
         }
     }
 
-    pub fn rx(&self, pktbuf: &pktbuf::PktBuf) {
+    pub fn rx(&self, pktbuf: &pktbuf::PktBuf) -> u16 {
         unsafe {
-            dpdk_sys::rte_eth_rx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16);
+            dpdk_sys::rte_eth_rx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16)
         }
     }
 
-    pub fn tx(&self, pktbuf: &pktbuf::PktBuf) {
+    pub fn tx(&self, pktbuf: &pktbuf::PktBuf) -> u16 {
         unsafe {
-            dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16);
+            dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16)
         }
     }
 }

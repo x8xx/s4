@@ -22,7 +22,7 @@ impl<'a> Parser<'a> {
             wasm_native_func_set_hdr_len
         );
 
-        let runtime_args = runtime::new_runtime_args!(2);
+        let runtime_args = runtime::new_runtime_args!(3);
         
         let parse_result_ringbuf = ring::RingBuf::new(ringbuf_len);
         {

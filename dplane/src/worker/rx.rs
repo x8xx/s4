@@ -15,22 +15,24 @@ pub struct RxArgs<'a> {
 
 pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     println!("Start Rx Core");
-    let rx_args = unsafe { &*transmute::<*mut c_void, *mut RxArgs>(rx_args_ptr) };
+    let rx_args = unsafe { &mut *transmute::<*mut c_void, *mut RxArgs>(rx_args_ptr) };
 
     let interface = Interface::new(&rx_args.name);
     let pktbuf_len = 32;
     let pktbuf = PktBuf::new(pktbuf_len);
     
     loop {
-        interface.rx(&pktbuf);
-        // for i in 0..pktbuf_len {
-        //     let (pkt, pkt_len) = pktbuf.get_raw_pkt(i);
-        //     // let parse_result = rx_args.parser.parse(pkt, pkt_len);
-        //     // match parse_result {
-        //     //     None => continue,
-        //     //     _ => {},
-        //     // }
-        // }
+        for i in 0..interface.rx(&pktbuf) as usize {
+            let (pkt, pkt_len) = pktbuf.get_raw_pkt(i);
+
+            let parse_result =  rx_args.parser.parse(pkt, pkt_len);
+            match parse_result {
+                None => {
+                    continue;
+                },
+                _ => {},
+            }
+        }
     }
     0
 }
