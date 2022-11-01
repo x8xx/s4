@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::Read;
-use std::collections::HashMap;
+// use std::collections::HashMap;
 use getopts::Options;
 use yaml_rust::YamlLoader;
 use serde::Deserialize;
@@ -22,7 +22,7 @@ pub struct InterfaceConfig {
 
 #[derive(Deserialize)]
 pub struct DpConfig {
-    pub headers: HashMap<String, DpConfigHeader>,
+    pub headers: Vec<DpConfigHeader>,
     pub tables: Vec<DpConfigTable>,
 }
 

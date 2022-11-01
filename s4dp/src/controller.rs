@@ -1,111 +1,32 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
+use std::ptr::null_mut;
 use std::thread;
 use std::sync::Arc;
 use std::io::Error;
 use std::net::TcpListener;
 use std::net::TcpStream;
+use std::ffi::c_void;
 
 use crate::config::*;
-// use crate::dpdk::dpdk_memory;
-// use crate::worker::*;
-// use crate::fib::header;
-// use crate::fib::parser;
-
-// use serde::Deserialize;
-// use wasmer_compiler_llvm::LLVM;
-
-// #[derive(Deserialize)]
-// struct DpConfig {
-//     headers: HashMap<String, DpConfigHeader>,
-//     tables: Vec<DpConfigTable>,
-// }
-
-// #[derive(Deserialize)]
-// struct DpConfigHeader {
-//     fields: Vec<u16>,
-//     used_fields: Vec<u16>,
-// }
-
-// #[derive(Deserialize)]
-// struct DpConfigTable {
-
-// }
-
-// fn get_sample_dp_config_header() -> String {
-//     "
-//         {
-//             \"headers\": {
-//                 \"ethernet\": {
-//                     \"fields\": [48, 48, 16],
-//                     \"used_fields\": [0, 1, 2]
-//                 },
-//                 \"ipv4\": {
-//                     \"fields\": [4, 4, 8, 16, 16, 3, 13, 8, 8, 16, 32, 32],
-//                     \"used_fields\": [9, 10, 11]
-//                 },
-//                 \"tcp\": {
-//                     \"fields\": [16, 16, 32, 32, 4, 6, 6, 16 ,16, 16],
-//                     \"used_fields\": [0, 1]
-//                 },
-//                 \"udp\": {
-//                     \"fields\": [16, 16, 16],
-//                     \"used_fields\": [0, 1]
-//                 }
-//             }
-//         }
-//     ".to_string()
-// }
+use crate::core::memory::array;
+use crate::core::thread::thread::spawn;
+use crate::parser::parser;
+use crate::parser::header;
+use crate::worker::rx;
 
 
-// fn allocate_core_to_worker(switch_config: &SwitchConfig,
-//                             rx_start_args: &mut rx::RxStartArgs,
-//                             fib_start_args_list: &mut Vec<fib::FibStartArgs>) -> bool {
-//     let mut unallocated_rx_core = switch_config.rx_cores;
-//     let mut unallocated_fib_core = switch_config.fib_cores;
-//     unsafe {
-//         let mut fib_core_id = 0;
-//         let mut lcore_id: u32 = dpdk_sys::rte_get_next_lcore(u32::MIN, 1, 0);
-//         while lcore_id < dpdk_sys::RTE_MAX_LCORE {
-//             if unallocated_rx_core > 0 {
-//                 if !remote_launch_rx(lcore_id, rx_start_args) {
-//                     panic!("Failed start rx worker");
-//                 }
-//                 unallocated_rx_core -= 1;
-//             } else if unallocated_fib_core > 0 {
-//                 if !remote_launch_fib(lcore_id, &mut fib_start_args_list[fib_core_id]) {
-//                     panic!("Failed start fib worker");
-//                 }
-//                 fib_core_id += 1;
-//                 unallocated_fib_core -= 1;
-//             }
-//             lcore_id = dpdk_sys::rte_get_next_lcore(lcore_id, 1, 0);
-//         }
-//     }
-    
-//     !(unallocated_rx_core > 0 || unallocated_fib_core > 0)
-// }
+struct DataPlaneDB<'a> {
+    headers: array::Array<header::Header>,
+    interface_db_list: array::Array<InterfaceDB<'a>>,
+    // parsed_hdr_list: array::Array<array::Array<(&'a header::Header, usize)>>,
+    // parser: parser::Parser,
+}
 
-
-
-// struct StartInterfaceArgs {
-//     l1_cache: *mut u8,
-//     l1_cache_key: *mut u8,
-//     lb: *mut u8,
-//     l2_cache: *mut u8,
-//     l2_cache_key: *mut u8,
-//     l3_cache: *mut u8,
-// }
-
-
-// fn start_interface(config: InterfaceConfig) -> u32  {
-//     0
-// }
-
-
-struct DataPlaneDB {
-
+struct InterfaceDB<'a> {
+    name: String,
+    parser: parser::Parser<'a>,
 }
 
 struct CacheDB {
@@ -118,34 +39,45 @@ struct TableDB {
 
 
 fn init_dataplane_db(switch_config: &SwitchConfig) -> DataPlaneDB {
-    DataPlaneDB {  }
+    let dp_config = &switch_config.dataplane;
+
+    // gen hdr_list
+    let hdr_confs = &dp_config.headers;
+    let mut headers: array::Array<header::Header> = array::Array::<header::Header>::new(hdr_confs.len());
+    for (i, hdr_conf) in hdr_confs.iter().enumerate() {
+        headers.write(i, header::Header::new(&hdr_conf.fields, &hdr_conf.used_fields));
+    }
+
+    let mut interface_db_list = array::Array::<InterfaceDB>::new(switch_config.interface_configs.len());
+    for (i, interface_conf) in switch_config.interface_configs.iter().enumerate() {
+        interface_db_list.write(i, InterfaceDB {
+            name: (&interface_conf.if_name).to_string(),
+            parser: parser::Parser::new(&switch_config.parser_wasm, 512, hdr_confs.len()),
+        })
+    }
+
+    DataPlaneDB {
+        headers,
+        interface_db_list,
+    }
 }
 
 
-fn run_server(listen_address: &str, dp_db: &DataPlaneDB) {
-    // run tcp
-
-
-
-    // for streams in listener.incoming() {
-    //     match streams {
-    //         // Err(e) => {},
-    //         Err(_) => {println!("error");},
-    //         Ok(stream) => {
-    //             println!("");
-    //             println!("Start Stream {}", listen_address);
-    //             println!("");
-    //             thread::spawn(move || {
-    //                 handler(stream).unwrap_or_else(|error| eprintln!("{:?}", error));
-    //             });
-    //         }
-    //     }
-    // }
+fn start_workers(dp_db: &DataPlaneDB) {
+    for i in 0..dp_db.interface_db_list.len() {
+        let mut rx_args = rx::RxArgs {
+            name: dp_db.interface_db_list[i].name.to_string(),
+            parser: &dp_db.interface_db_list[i].parser,
+        };
+        spawn(rx::start_rx, &mut rx_args as *mut rx::RxArgs as *mut c_void);
+    }
 }
 
 
 // CP to DP TCP Stream
-fn cp_stream_handler(mut stream: TcpStream, dp_db_arc: Arc<DataPlaneDB>) -> Result<(), Error> {
+// fn cp_stream_handler(mut stream: TcpStream, dp_db_arc: Arc<DataPlaneDB>) -> Result<(), Error> {
+// fn cp_stream_handler(mut stream: TcpStream, dp_db_arc: *mut DataPlaneDB) -> Result<(), Error> {
+fn cp_stream_handler(mut stream: TcpStream) -> Result<(), Error> {
     let mut buffer = [0; 1024];
     loop {
         let nbytes = stream.read(&mut buffer)?;
@@ -161,9 +93,14 @@ fn cp_stream_handler(mut stream: TcpStream, dp_db_arc: Arc<DataPlaneDB>) -> Resu
 
 // main core
 pub fn start_controller(switch_config: &SwitchConfig) {
+    println!("init dataplane db");
     let dp_db = init_dataplane_db(switch_config);
-    let dp_db_arc = Arc::new(dp_db);
-    // run_server(&switch_config.listen_address, &dp_db);
+
+    println!("start workers");
+    start_workers(&dp_db);
+
+    // let dp_db_arc = Arc::new(dp_db);
+    // let dp_db_ptr = &mut dp_db as *mut DataPlaneDB;
 
     println!("🚀Launch DP Server  {}", switch_config.listen_address);
     let listener = TcpListener::bind(&switch_config.listen_address).expect("failed to start dp server");
@@ -172,14 +109,15 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         // connectio check
         match listener.accept() {
             Ok((client, addr)) => {
-                let dp_db_arc_clone = dp_db_arc.clone();
+                // let dp_db_arc_clone = dp_db_arc.clone();
                 thread::spawn(move || {
-                    cp_stream_handler(client, dp_db_arc_clone);
+                    // cp_stream_handler(client, dp_db_arc_clone);
+                    // cp_stream_handler(client, dp_db_ptr);
+                    cp_stream_handler(client);
                 });
             },
             _ => {},
         }
-        println!("loop!!!!");
     }
 
 

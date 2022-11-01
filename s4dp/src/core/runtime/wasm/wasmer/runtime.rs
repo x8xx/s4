@@ -7,22 +7,20 @@ macro_rules! new_runtime_args {
 }
 
 macro_rules! new_runtime {
-    ($wasm: expr, $( $native_func_name: ident, $native_func: ident ),*) => {
+    ($wasm: expr, $( $native_func_name: expr, $native_func: ident ),*) => {
         {
             let llvm_compiler = wasmer_compiler_llvm::LLVM::default();
             let store = wasmer::Store::new(&wasmer::Universal::new(llvm_compiler).engine());
             let module = wasmer::Module::from_binary(&store, $wasm).unwrap();
 
             let linear_memory = wasmer::Memory::new(&store, wasmer::MemoryType::new(1, None, false)).unwrap();
+            let mut import_object = wasmer::ImportObject::new();
+            let mut env_obj = wasmer::Exports::new();
+            env_obj.insert("__linear_memory", linear_memory);
             $(
-                let $native_func_name = wasmer::Function::new_native(&store, $native_func);
-             )*
-            let import_object = wasmer::imports! {
-                "env" => {
-                    "__linear_memory" => linear_memory,
-                    $("$native_func_name" => $native_func_name,)*
-                },
-            };
+                env_obj.insert($native_func_name, wasmer::Function::new_native(&store, $native_func));
+            )*
+            import_object.register("env", env_obj);
 
             let instance = wasmer::Instance::new(&module, &import_object).unwrap();
             crate::core::runtime::wasm::runtime::Runtime {
@@ -53,7 +51,6 @@ macro_rules! call_runtime_i32 {
         $runtime.instance.exports.get_function($func_name).unwrap().call($runtime_args.as_slice()).unwrap()[0].unwrap_i32()
     }
 }
-
 
 pub struct Runtime {
     pub store: wasmer::Store,

@@ -1,5 +1,7 @@
 use std::ffi::CStr;
 use std::ptr::null_mut;
+use std::ffi::CString;
+use std::os::raw::c_char;
 use crate::core::helper::dpdk::gen_random_name;
 use crate::core::network::pktbuf;
 
@@ -12,7 +14,7 @@ impl Interface {
         let port_number = Interface::find_interface_from_name(name);     
         let mempool = unsafe {
             dpdk_sys::rte_pktmbuf_pool_create(
-                gen_random_name(),
+                crate::core::helper::dpdk::gen_random_name() .as_ptr() as *mut c_char,
                 8192,
                 256,
                 0,
@@ -23,7 +25,7 @@ impl Interface {
         Interface::up(port_number, mempool);
 
         Interface {
-            port_number
+            port_number,
         }
     }
 
@@ -79,13 +81,13 @@ impl Interface {
 
     pub fn rx(&self, pktbuf: &pktbuf::PktBuf) {
         unsafe {
-            dpdk_sys::rte_eth_rx_burst(self.port_number, 0, pktbuf.buf_ptr(),  pktbuf.len() as u16);
+            dpdk_sys::rte_eth_rx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16);
         }
     }
 
     pub fn tx(&self, pktbuf: &pktbuf::PktBuf) {
         unsafe {
-            dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.buf_ptr(),  pktbuf.len() as u16);
+            dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16);
         }
     }
 }

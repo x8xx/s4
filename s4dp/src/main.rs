@@ -2,9 +2,9 @@ mod core;
 mod config;
 mod controller;
 mod parser;
-mod cache;
-mod pipeline;
-// mod worker;
+// mod cache;
+// mod pipeline;
+mod worker;
 
 use std::env;
 

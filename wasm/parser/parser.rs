@@ -1,75 +1,92 @@
 #![no_main]
 
+/**
+ * 0: ethernet, 1: IPv4, 2, TCP, 3, UDP
+ */
+
+
 extern {
-    pub fn pkt_read(packet_id: i64, offset: u8) -> u8;
-    pub fn extract_header(parse_id: i64, hdr_id: i64, base_offset: i64);
+    pub fn read_pkt(packet_id: i64, offset: u8) -> u8;
+    pub fn extract_hdr(parse_result_id: i64, hdr_id: i64, offset: i32);
+    pub fn set_hdr_len(parse_result_id: i64, hdr_len: usize);
 }
 
 pub struct Packet {
     id: i64,
-    parse_id: i64,
-    size: u8,
+    len: u8,
+    parse_result_id: i64,
 }
 
+
 #[no_mangle]
-pub fn parse(packet_id: i64, packet_size: i32, parse_id: i64) -> u8 {
+pub fn parse(pkt_id: i64, pkt_len: i32, parse_result_id: i64) -> bool {
     let packet = Packet {
-        id: packet_id,
-        parse_id,
-        size: packet_size as u8,
+        id: pkt_id,
+        len: pkt_len as u8,
+        parse_result_id,
     };
     parse_ethernet(&packet)
 }
 
-fn parse_ethernet(packet: &Packet) -> u8 {
+fn parse_ethernet(pkt: &Packet) -> bool {
     let hdr_id = 0;
     let ethernet_size: u8 = 13;
-    if packet.size < ethernet_size {
-        return 0;
+    if pkt.len < ethernet_size {
+        return false;
     }
 
     unsafe {
-        extract_header(packet.parse_id, hdr_id, 0);
-        if pkt_read(packet.id, 12) == 0x8 && pkt_read(packet.id, 13) == 0 {
-            return parse_ipv4(packet, ethernet_size);
+        extract_hdr(pkt.parse_result_id, hdr_id, 0);
+        if read_pkt(pkt.id, 12) == 0x8 && read_pkt(pkt.id, 13) == 0 {
+            return parse_ipv4(pkt, ethernet_size);
         }
+        set_hdr_len(pkt.parse_result_id, ethernet_size as usize);
     };
-    ethernet_size
+    true
 }
 
-fn parse_ipv4(packet: &Packet, base_offset: u8) -> u8 {
+fn parse_ipv4(pkt: &Packet, offset: u8) -> bool {
     let hdr_id = 1;
     let ipv4_size: u8 = 20;
-    if packet.size < ipv4_size + base_offset {
-        return base_offset;
+    if pkt.len < ipv4_size + offset {
+        return false;
     }
 
     unsafe {
-        extract_header(packet.parse_id, hdr_id, base_offset as i64);
-        match pkt_read(packet.id, 10 + base_offset) {
-            6 => parse_tcp(packet, 20 + base_offset),
-            17 => parse_udp(packet, 20 + base_offset),
-            _ => base_offset + ipv4_size,
-        }
+        extract_hdr(pkt.parse_result_id, hdr_id, offset as i32);
+        return match read_pkt(pkt.id, 10 + offset) {
+            6 => parse_tcp(pkt, 20 + offset),
+            17 => parse_udp(pkt, 20 + offset),
+            _ => {
+                set_hdr_len(pkt.parse_result_id, (offset + ipv4_size) as usize);
+                true
+            },
+        };
     }
 }
 
-fn parse_tcp(packet: &Packet, base_offset: u8) -> u8 {
+fn parse_tcp(pkt: &Packet, offset: u8) -> bool {
     let hdr_id = 2;
     let tcp_size: u8 = 20;
-    if packet.size < tcp_size + base_offset {
-        return base_offset;
+    if pkt.len < tcp_size + offset {
+        return false;
     }
-    unsafe { extract_header(packet.parse_id, hdr_id, base_offset as i64); }
-    base_offset + tcp_size
+    unsafe {
+        extract_hdr(pkt.parse_result_id, hdr_id, offset as i32);
+        set_hdr_len(pkt.parse_result_id, (offset + tcp_size) as usize);
+    }
+    true
 }
 
-fn parse_udp(packet: &Packet, base_offset: u8) -> u8 {
+fn parse_udp(pkt: &Packet, offset: u8) -> bool {
     let hdr_id = 3;
     let udp_size: u8 = 8;
-    if packet.size < udp_size + base_offset {
-        return base_offset - 1;
+    if pkt.len < udp_size + offset {
+        return false;
     }
-    unsafe { extract_header(packet.parse_id, hdr_id, base_offset as i64); }
-    base_offset + udp_size
+    unsafe {
+        extract_hdr(pkt.parse_result_id, hdr_id, offset as i32);
+        set_hdr_len(pkt.parse_result_id, (offset + udp_size) as usize);
+    }
+    true
 }

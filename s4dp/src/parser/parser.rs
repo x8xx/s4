@@ -4,55 +4,66 @@ use crate::core::memory::array::Array;
 use crate::parser::parse_result::ParseResult;
 
 
-pub struct Parser {
+pub struct Parser<'a> {
     runtime: runtime::Runtime,
     runtime_args: runtime::RuntimeArgs,
-    buf: ring::RingBuf<ParseResult>,
+    parse_result_ringbuf: ring::RingBuf<ParseResult<'a>>,
 }
 
-impl Parser {
-    pub fn new(wasm: &[u8], buf_len: usize, hdr_list_len: usize) -> Self {
+impl<'a> Parser<'a> {
+    pub fn new(wasm: &[u8], ringbuf_len: usize, hdr_list_len: usize) -> Self {
         let runtime = runtime::new_runtime!(
             wasm,
-            read_pkt,
+            "read_pkt",
             wasm_native_func_read_pkt,
-            extract_hdr,
+            "extract_hdr",
             wasm_native_func_extract_hdr,
-            set_hdr_len,
+            "set_hdr_len",
             wasm_native_func_set_hdr_len
         );
 
         let runtime_args = runtime::new_runtime_args!(2);
-
-        let buf = ring::RingBuf::new(buf_len);
-        let mut parse_result_ptrs: Array<&ParseResult> = Array::new(buf_len);
-        buf.malloc_bulk(parse_result_ptrs, buf_len);
-        for parse_result in parse_result_ptrs {
-            parse_result.parse_result_of_header = Array::new(hdr_list_len);
+        
+        let parse_result_ringbuf = ring::RingBuf::new(ringbuf_len);
+        {
+            let parse_result_array= Array::<&mut ParseResult>::new(ringbuf_len);
+            let mut parse_result_slice = parse_result_array.as_slice();
+            parse_result_ringbuf.malloc_bulk(&mut parse_result_slice, ringbuf_len);
+            for parse_result in parse_result_slice.iter_mut() {
+                (*parse_result).parse_result_of_header_list = Array::new(hdr_list_len);
+            }
+            parse_result_ringbuf.free_bulk(parse_result_slice, ringbuf_len);
+            parse_result_array.free();
         }
-        parse_result_ptrs.free();
 
         Parser {
             runtime,
             runtime_args,
-            buf,
+            parse_result_ringbuf,
         }
     }
 
-    pub fn parse(&self, pkt: &[u8]) -> Option<&ParseResult> {
-        let parse_result = self.buf.malloc();
-
-        runtime::set_runtime_arg_i64!(self.runtime_args, 0, pkt.as_ptr() as i64);
-        runtime::set_runtime_arg_i32!(self.runtime_args, 1, pkt.len() as i32);
+    pub fn parse(&mut self, pkt: *mut u8, pkt_len: usize) -> Option<&ParseResult> {
+        let parse_result = self.parse_result_ringbuf.malloc();
+        runtime::set_runtime_arg_i64!(self.runtime_args, 0, pkt as i64);
+        runtime::set_runtime_arg_i32!(self.runtime_args, 1, pkt_len as i32);
         runtime::set_runtime_arg_i64!(self.runtime_args, 2, parse_result as *mut ParseResult as i64);
 
-        let is_accept = runtime::call_runtime_i32!(self.runtime, "parse", self.runtime_args) as bool ;
-        if is_accept {
+        let is_accept = runtime::call_runtime_i32!(self.runtime, "parse", self.runtime_args);
+        if is_accept == 1 {
             Some(parse_result)
         } else {
-            self.buf.free(parse_result);
+            self.parse_result_ringbuf.free(parse_result);
             None
         }
+    }
+
+    pub fn parse_result_free(&'a self, parse_result: &'a mut ParseResult<'a>) {
+        let parse_result_of_header_list = &mut parse_result.parse_result_of_header_list;
+        for i in 0..parse_result_of_header_list.len() {
+            parse_result_of_header_list[i].is_valid = false;
+        }
+        self.parse_result_ringbuf.free(parse_result);
     }
 }
 
@@ -65,12 +76,12 @@ pub fn wasm_native_func_read_pkt(pkt_id: i64, offset: i32) -> i32 {
 }
 
 pub fn wasm_native_func_extract_hdr(parse_result_id: i64, hdr_id: i64, offset: i32) {
-    let parse_result = parse_result_id as  *mut ParseResult as &mut ParseResult;
-    parse_result.parse_result_of_header_list[hdr_id].is_valid = true;
-    parse_result.parse_result_of_header_list[hdr_id].offset = offset as u16;
+    let parse_result = unsafe { &mut *(parse_result_id as  *mut ParseResult) as &mut ParseResult };
+    parse_result.parse_result_of_header_list[hdr_id as usize].is_valid = true;
+    parse_result.parse_result_of_header_list[hdr_id as usize].offset = offset.try_into().unwrap();
 }
 
-pub fn wasm_native_func_set_hdr_len(parse_result_id: i64, hdr_len: usize) {
-    let parse_result = parse_result_id as  *mut ParseResult as &mut ParseResult;
-    parse_result.hdr_len = hdr_len;
+pub fn wasm_native_func_set_hdr_len(parse_result_id: i64, hdr_len: i32) {
+    let parse_result = unsafe { &mut *(parse_result_id as  *mut ParseResult) as &mut ParseResult };
+    parse_result.hdr_len = hdr_len as usize;
 }

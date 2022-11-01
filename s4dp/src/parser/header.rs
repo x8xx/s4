@@ -1,5 +1,9 @@
 use crate::core::memory::array::Array;
 
+pub struct Test {
+    pub data: Array<u8>,
+}
+
 pub struct Header {
     pub fields: Array<Field>,
     pub used_fields: Array<Field>,
@@ -17,8 +21,8 @@ pub struct Field {
 
 impl Header {
     pub fn new(field_len_list: &[u16], used_field_len_list: &[u16]) -> Self {
-        let fields = Array::<Field>::new(field_len_list.len());
-        let used_fields = Array::<Field>::new(used_field_len_list.len());
+        let mut fields = Array::<Field>::new(field_len_list.len());
+        let mut used_fields = Array::<Field>::new(used_field_len_list.len());
         
         let mut pre_field = &Field {
             start_byte_pos: 0,
@@ -39,8 +43,8 @@ impl Header {
         Header {
             fields,
             used_fields,
-            fields_len: field_len_list.len() as isize,
-            used_fields_len: used_field_len_list.len() as isize,
+            fields_len: field_len_list.len(),
+            used_fields_len: used_field_len_list.len(),
         }
     }
 }

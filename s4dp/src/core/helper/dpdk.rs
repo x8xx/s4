@@ -1,13 +1,16 @@
 use std::env;
 use std::ffi::CString;
 use std::os::raw::c_char;
-use uuid::Uuid;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+use crate::core::thread::thread::thread_init;
 
 
-pub fn gen_random_name() -> *mut c_char {
-    let uuid_str = Uuid::new_v4().hyphenated().to_string();
-    let name_cstr = CString::new(uuid_str).unwrap();
-    name_cstr.as_ptr() as *mut c_char
+pub fn gen_random_name() -> CString {
+    let now = SystemTime::now();
+    let unixtime = now.duration_since(UNIX_EPOCH).expect("failed get current time.");
+    let name_cstr = CString::new(unixtime.as_nanos().to_string()).unwrap();
+    name_cstr
 }
 
 pub fn init() -> i32 {
@@ -25,6 +28,8 @@ pub fn init() -> i32 {
         if ret < 0 {
             panic!("Cannot init EAL\n");
         }
+
+        thread_init(); 
 
         ret + 1
     }
