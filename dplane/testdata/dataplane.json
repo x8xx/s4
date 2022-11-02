@@ -19,6 +19,14 @@
     ],
     "tables": [
         {
+            "keys": [
+                {
+                    "match_kind": "exact",
+                    "header_id": 0,
+                    "field_id": 0
+                }
+            ],
+            "default_action_id": 0,
             "max_size": 100000
         }
     ]

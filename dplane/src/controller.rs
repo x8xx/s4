@@ -1,9 +1,6 @@
-use std::collections::HashMap;
-use std::fs::File;
 use std::io::prelude::*;
-use std::ptr::null_mut;
 use std::thread;
-use std::sync::Arc;
+// use std::sync::Arc;
 use std::io::Error;
 use std::net::TcpListener;
 use std::net::TcpStream;
@@ -12,74 +9,10 @@ use std::ffi::c_void;
 use crate::config::*;
 use crate::core::memory::array;
 use crate::core::thread::thread::spawn;
-use crate::parser::parser;
-use crate::parser::header;
-use crate::worker::rx;
-
-
-struct DataPlaneDB<'a> {
-    header_list: array::Array<header::Header>,
-    // interface_db_list: array::Array<InterfaceDB<'a>>,
-    rx_args_list: array::Array< rx::RxArgs<'a>>,
-}
-
-struct InterfaceDB<'a> {
-    name: String,
-    parser: parser::Parser<'a>,
-}
-
-struct CacheDB {
-
-}
-
-struct TableDB {
-
-} 
-
-
-fn init_dataplane_db(switch_config: &SwitchConfig) -> DataPlaneDB {
-    let dp_config = &switch_config.dataplane;
-
-    // gen hdr_list
-    let hdr_confs = &dp_config.headers;
-    let mut header_list: array::Array<header::Header> = array::Array::<header::Header>::new(hdr_confs.len());
-    for (i, hdr_conf) in hdr_confs.iter().enumerate() {
-        header_list.write(i, header::Header::new(&hdr_conf.fields, &hdr_conf.used_fields));
-    }
-
-    // gen parser
-    let mut rx_args_list = array::Array::<rx::RxArgs>::new(switch_config.interface_configs.len());
-    for (i, interface_conf) in switch_config.interface_configs.iter().enumerate() {
-        rx_args_list.write(i, rx::RxArgs {
-            name: (&interface_conf.if_name).to_string(),
-            parser: parser::Parser::new(&switch_config.parser_wasm, 512, hdr_confs.len()),
-        })
-    }
-    // let mut interface_db_list = array::Array::<InterfaceDB>::new(switch_config.interface_configs.len());
-    // for (i, interface_conf) in switch_config.interface_configs.iter().enumerate() {
-    //     interface_db_list.write(i, InterfaceDB {
-    //         name: (&interface_conf.if_name).to_string(),
-    //         parser: parser::Parser::new(&switch_config.parser_wasm, 512, hdr_confs.len()),
-    //     })
-    // }
-
-    DataPlaneDB {
-        header_list,
-        // interface_db_list,
-        rx_args_list,
-    }
-}
-
-
-fn start_workers(dp_db: &mut DataPlaneDB) {
-    for i in 0..dp_db.rx_args_list.len() {
-        // let mut rx_args = rx::RxArgs {
-        //     name: dp_db.interface_db_list[i].name.to_string(),
-        //     parser: &dp_db.interface_db_list[i].parser,
-        // };
-        spawn(rx::start_rx, &mut dp_db.rx_args_list[i] as *mut rx::RxArgs as *mut c_void);
-    }
-}
+use crate::parser::{header, parser};
+use crate::pipeline::pipeline::Pipeline;
+use crate::pipeline::table::Table;
+use crate::worker;
 
 
 // CP to DP TCP Stream
@@ -99,13 +32,66 @@ fn cp_stream_handler(mut stream: TcpStream) -> Result<(), Error> {
 }
 
 
+struct WorkerArgs<'a> {
+    rx_args_list: array::Array<worker::rx::RxArgs<'a>>,
+    pipeline_args_list: array::Array<worker::pipeline::PipelineArgs<'a>>,
+}
+
+fn start_workers(worker_args: &mut WorkerArgs) {
+    for i in 0..worker_args.rx_args_list.len() {
+        spawn(worker::rx::start_rx, &mut worker_args.rx_args_list[i] as *mut worker::rx::RxArgs as *mut c_void);
+    }
+
+    for i in 0..worker_args.pipeline_args_list.len() {
+        spawn(worker::pipeline::start_pipeline, &mut worker_args.pipeline_args_list[i] as *mut worker::pipeline::PipelineArgs as *mut c_void);
+    }
+}
+
+
 // main core
 pub fn start_controller(switch_config: &SwitchConfig) {
     println!("init dataplane db");
-    let mut dp_db = init_dataplane_db(switch_config);
+    let dp_config = &switch_config.dataplane;
+
+    // header_list
+    let hdr_confs = &dp_config.headers;
+    let mut header_list: array::Array<header::Header> = array::Array::<header::Header>::new(hdr_confs.len());
+    for (i, hdr_conf) in hdr_confs.iter().enumerate() {
+        header_list.init(i, header::Header::new(&hdr_conf.fields, &hdr_conf.used_fields));
+    }
+
+    //table_list
+    let table_confs = &dp_config.tables;
+    let mut table_list = array::Array::<Table>::new(table_confs.len());
+    for (i, table_conf) in table_confs.iter().enumerate() {
+        table_list.init(i, Table::new(table_conf, &header_list));
+    }
+
+    // rx_args_list
+    let mut rx_args_list = array::Array::<worker::rx::RxArgs>::new(switch_config.interface_configs.len());
+    for (i, interface_conf) in switch_config.interface_configs.iter().enumerate() {
+        rx_args_list.init(i, worker::rx::RxArgs {
+            name: (&interface_conf.if_name).to_string(),
+            parser: parser::Parser::new(&switch_config.parser_wasm, 512, hdr_confs.len()),
+        })
+    }
+
+    // pipeline_args_list
+    let mut pipeline_args_list = array::Array::<worker::pipeline::PipelineArgs>::new(switch_config.pipeline_core_num as usize);
+    for i in 0..pipeline_args_list.len() {
+        pipeline_args_list.init(i, worker::pipeline::PipelineArgs {
+            pipeline: Pipeline::new(&switch_config.pipeline_wasm, &table_list),
+        });
+    }
 
     println!("start workers");
-    start_workers(&mut dp_db);
+    let mut worker_args = WorkerArgs {
+        rx_args_list,
+        pipeline_args_list,
+    };
+    start_workers(&mut worker_args);
+
+
 
     // let dp_db_arc = Arc::new(dp_db);
     // let dp_db_ptr = &mut dp_db as *mut DataPlaneDB;
@@ -127,140 +113,4 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             _ => {},
         }
     }
-
-
-
-
-
-    /* ------------------------
-     * Header
-     * --------------------------*/
-    // println!("😟Loading Header");
-    // let dp_config_json = get_sample_dp_config_header();
-    // let dp_config: DpConfig = serde_json::from_str(&dp_config_json).unwrap();
-
-    // let hdr_def_num = dp_config.headers.len();
-    // println!("{}", hdr_def_num);
-    // let hdr_defs = dpdk_memory::malloc::<header::Header>("header_definitions".to_string(), hdr_def_num as u32);
-
-    // for (i, hdr_conf) in dp_config.headers.iter().enumerate() {
-    //     unsafe {
-    //         *hdr_defs.offset(i as isize) = header::Header::new((&*hdr_conf.0).to_string(), &hdr_conf.1.fields, &hdr_conf.1.used_fields);
-    //     }
-    // }
-    // println!("👍Done");
-
-
-    // /* ------------------------
-    //  * Parser
-    //  * --------------------------*/
-    // println!("😟Loading Parser");
-    // let mut f = File::open(&switch_config.parser_path).unwrap();
-    // let metadata = std::fs::metadata(&switch_config.parser_path).unwrap();
-    // let mut parser_bin = vec![0;metadata.len() as usize];
-    // f.read(&mut parser_bin).unwrap();
-
-    // let llvm_compiler = LLVM::default();
-    // let parser_store = wasmer::Store::new(&wasmer::Universal::new(llvm_compiler).engine());
-    // // let parser_store = wasmer::Store::default();
-    // let parser_module = wasmer::Module::from_binary(&parser_store, &parser_bin).unwrap();
-
-    // let parser_fn_pkt_read = wasmer::Function::new_native(&parser_store, parser::wasm_pkt_read);
-    // let parser_fn_extract_header = wasmer::Function::new_native(&parser_store, parser::wasm_extract_header);
-    // let parser_linear_memory = wasmer::Memory::new(&parser_store, wasmer::MemoryType::new(1, None, false)).unwrap();
-    // let parser_import_object = wasmer::imports! {
-    //     "env" => {
-    //         "pkt_read" => parser_fn_pkt_read,
-    //         "extract_header" => parser_fn_extract_header,
-    //         "__linear_memory" => parser_linear_memory,
-    //     },
-    // };
-
-    // let parser_instance = wasmer::Instance::new(&parser_module, &parser_import_object).unwrap();
-    // let fn_parse = parser_instance.exports.get_function("parse").unwrap();
-    // println!("👍Done");
-
-
-
-
-    // /* ------------------------
-    //  * Table
-    //  * --------------------------*/
-
-
-
-
-
-    // /* ------------------------
-    //  * Pipeline
-    //  * --------------------------*/
-    // let pipelines = dpdk_memory::malloc::<wasmer::Function>("pipelines".to_string(), 100);
-    
-
-    // /* ------------------------
-    //  * cache (L1, L3)
-    //  * --------------------------*/
-    // let l1_cache_len = 65535;
-    // let l1_cache = dpdk_memory::malloc::<u8>("l1_cache".to_string(), l1_cache_len);
-    // let l1_key_max_len = 64;
-    // let l1_cache_key = dpdk_memory::malloc::<u8>("l1_key".to_string(), l1_cache_len * l1_key_max_len);
-
-
-
-    // /* ------------------------
-    //  * start interface
-    //  * --------------------------*/
-    // for config in switch_config.interface_configs {
-    //     start_interface(config);
-    // }
-
-
-
-
-
-    // /* ------------------------
-    //  * rx core (load balancer)
-    //  * --------------------------*/
-
-    // let lb_filter_len = 65535;
-    // let lb_filter = dpdk_memory::malloc::<u8>("lb_filter".to_string(), lb_filter_len);
-
-    // // let fib_core_ring_size = 4096;
-    // let fib_core_ring_size = 65536;
-    // let mut fib_core_rings = Vec::new();
-    // fib_core_rings.push(dpdk_memory::Ring::new("fib1", fib_core_ring_size));
-    // fib_core_rings.push(dpdk_memory::Ring::new("fib2", fib_core_ring_size));
-
-    // let mut rx_start_args = rx::RxStartArgs {
-    //     if_name: &switch_config.if_name,
-    //     hdrs: hdr_defs,
-    //     hdrs_len: hdr_def_num as u32,
-    //     parser: fn_parse,
-    //     l1_cache,
-    //     l1_cache_key,
-    //     l1_key_max_len,
-    //     lb_filter,
-    //     fib_core_rings: &fib_core_rings,
-    // };
-
-
-    // /* ------------------------
-    //  * cache core
-    //  * --------------------------*/
-    // let mut fib_start_args_list = Vec::new();
-    // fib_start_args_list.push(fib::FibStartArgs {
-    //     fib_core_ring: &fib_core_rings[0],
-    //     core_id: 0,
-    // });
-    // fib_start_args_list.push(fib::FibStartArgs {
-    //     fib_core_ring: &fib_core_rings[1],
-    //     core_id: 1,
-    // });
-
-
-    // // run switch dp
-    // allocate_core_to_worker(switch_config, &mut rx_start_args, &mut fib_start_args_list);
-
-
-    // let server_address = switch_config.listen_address;
 }

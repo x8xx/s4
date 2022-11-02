@@ -20,6 +20,10 @@ pub struct InterfaceConfig {
 }
 
 
+/**
+ * dataplan_config.json mapping
+ */
+
 #[derive(Deserialize)]
 pub struct DpConfig {
     pub headers: Vec<DpConfigHeader>,
@@ -34,7 +38,16 @@ pub struct DpConfigHeader {
 
 #[derive(Deserialize)]
 pub struct DpConfigTable {
+    pub keys: Vec<DpConfigTableKey>,
+    pub default_action_id: u64,
+    pub max_size: u64,
+}
 
+#[derive(Deserialize)]
+pub struct DpConfigTableKey {
+    pub match_kind: String,
+    pub header_id: u64,
+    pub field_id: u64,
 }
 
 
@@ -85,6 +98,7 @@ pub fn parse_switch_args(args: &[String]) -> SwitchConfig {
 
     let listen_address = get_string_from_yaml_value(yaml_config_general, "listen_address");
     let pipeline_core_num = yaml_config_general["pipeline_core_num"].clone().as_i64().unwrap() as u8;
+
 
     let mut interface_configs = Vec::new();
     for yaml_config_interface in yaml_config_interfaces.as_hash().unwrap() {

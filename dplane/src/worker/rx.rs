@@ -11,6 +11,7 @@ use crate::parser::parser::Parser;
 pub struct RxArgs<'a> {
     pub name: String,
     pub parser: Parser<'a>,
+    // pub pipeline_ring_list:  
 }
 
 pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
@@ -172,47 +173,3 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
 //    0
 //}
-
-
-// #[repr(C)]
-// pub struct RxMainArgs<'a> {
-//     pub core_id: u8,
-
-//     pub if_name: &'a str,
-
-//     pub hdrs: *const Header,
-//     pub hdrs_len: u32,
-//     pub parser: *const wasmer::Function,
-
-//     pub l1_cache: *mut cache::Cache,
-//     pub lb_filter: *mut u8,
-
-//     pub fib_core_rings: &'a [dpdk_memory::Ring],
-// }
-
-
-// pub extern "C" fn rx_main(args_ptr: *mut c_void) -> i32 {
-//     let args = unsafe {&*transmute::<*mut c_void, &RxMainArgs>(args_ptr)};
-//     println!("Core{}: Loading Rx Core...", args.core_id);
-
-//     println!("Core{}: Creating mbuf...", args.core_id);
-//     let pktmbuf = dpdk_memory::create_pktmbuf("mbuf");
-//     let port_number = dpdk_port::port_init(args.if_name, pktmbuf);
-
-//     println!("create pktprocessor");
-//     let pp = dpdk_eth::PktProcessor::new(port_number);
-
-//     // let if_name = &rx_start_args.if_name;
-//     // let hdrs = rx_start_args.hdrs;
-//     // let hdrs_len = rx_start_args.hdrs_len;
-//     // let parser = rx_start_args.parser;
-
-//     // let l1_cache = rx_start_args.l1_cache;
-//     // let l1_cache_key = rx_start_args.l1_cache_key;
-//     // let l1_key_max_len = rx_start_args.l1_key_max_len;
-
-//     // let lb_filter = &rx_start_args.lb_filter;
-
-//     // let fib_core_rings = &rx_start_args.fib_core_rings;
-//     0
-// }

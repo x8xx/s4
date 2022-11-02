@@ -1,9 +1,5 @@
 use crate::core::memory::array::Array;
 
-pub struct Test {
-    pub data: Array<u8>,
-}
-
 pub struct Header {
     pub fields: Array<Field>,
     pub used_fields: Array<Field>,
@@ -86,5 +82,13 @@ impl Field {
             end_byte_pos,
             end_bit_mask,
         }
+    }
+
+    pub fn cmp_exact_match(&self, pkt: *const u8, value: &Array<u8>, offset: u16) -> bool {
+        true
+    }
+
+    pub fn cmp_lpm_match(&self, pkt: *const u8, value: &Array<u8>, offset: u16, prefix: u8) -> bool {
+        true
     }
 }
