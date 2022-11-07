@@ -1,8 +1,6 @@
 use std::ffi::CStr;
 use std::ptr::null_mut;
-use std::ffi::CString;
 use std::os::raw::c_char;
-use crate::core::helper::dpdk::gen_random_name;
 use crate::core::network::pktbuf;
 
 pub struct Interface {
@@ -79,15 +77,22 @@ impl Interface {
         }
     }
 
-    pub fn rx(&self, pktbuf: &pktbuf::PktBuf) -> u16 {
+    pub fn rx(&self, pktbuf: &mut pktbuf::PktBuf, len: usize) -> u16 {
         unsafe {
-            dpdk_sys::rte_eth_rx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16)
+            // dpdk_sys::rte_eth_rx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16);
+            dpdk_sys::rte_eth_rx_burst(
+                self.port_number,
+                0,
+                pktbuf as *mut pktbuf::PktBuf as *mut *mut dpdk_sys::rte_mbuf,
+                len as u16
+            )
         }
     }
 
     pub fn tx(&self, pktbuf: &pktbuf::PktBuf) -> u16 {
         unsafe {
-            dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16)
+            // dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.pkt_count as u16)
+            0
         }
     }
 }

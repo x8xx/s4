@@ -46,6 +46,12 @@ macro_rules! set_runtime_arg_i32  {
 }
 
 
+macro_rules! call_runtime {
+    ($runtime: expr, $func_name: expr, $runtime_args: expr) => {
+        $runtime.instance.exports.get_function($func_name).unwrap().call($runtime_args.as_slice()).unwrap()
+    }
+}
+
 macro_rules! call_runtime_i32 {
     ($runtime: expr, $func_name: expr, $runtime_args: expr) => {
         $runtime.instance.exports.get_function($func_name).unwrap().call($runtime_args.as_slice()).unwrap()[0].unwrap_i32()
@@ -63,4 +69,5 @@ pub(crate) use new_runtime_args;
 pub(crate) use new_runtime;
 pub(crate) use set_runtime_arg_i64;
 pub(crate) use set_runtime_arg_i32;
+pub(crate) use call_runtime;
 pub(crate) use call_runtime_i32;

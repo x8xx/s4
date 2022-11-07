@@ -48,6 +48,7 @@ impl<T> Array<T> {
         self.data
     }
 
+
     pub fn len(&self) -> usize {
         self.len
     }
@@ -57,6 +58,12 @@ impl<T> Array<T> {
             from_raw_parts_mut::<T>(self.data, self.len)
         }
 
+    }
+
+    pub fn get(&self, index: usize) -> &mut T {
+        unsafe {
+            &mut *self.data.offset(index as isize)
+        }
     }
 
     pub fn free(self) {

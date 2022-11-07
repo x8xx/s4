@@ -28,7 +28,7 @@ impl Ring {
         }
     }
 
-    pub fn enqueue<T>(&self, objs: &&mut T, len: usize) -> usize {
+    pub fn enqueue_burst<T>(&self, objs: &&mut T, len: usize) -> usize {
         unsafe {
             dpdk_sys::rte_ring_enqueue_burst(
                 self.ring,
@@ -39,13 +39,31 @@ impl Ring {
         }.try_into().unwrap()
     }
 
-    pub fn dequeue<T>(&self, objs: &mut &mut T, len: usize) -> usize {
+    pub fn dequeue_burst<T>(&self, objs: &mut &mut T, len: usize) -> usize {
         unsafe {
             dpdk_sys::rte_ring_dequeue_burst(
                 self.ring,
-                objs as *mut &mut T as *mut *mut c_void,
+                objs as *mut &mut T as *mut *mut T as *mut *mut c_void,
                 len as u32,
                 null_mut()
+            )
+        }.try_into().unwrap()
+    }
+
+    pub fn enqueue<T>(&self, obj: &mut T) -> usize {
+        unsafe {
+            dpdk_sys::rte_ring_enqueue(
+                self.ring,
+                obj as *mut T as *mut c_void,
+            )
+        }.try_into().unwrap()
+    }
+
+    pub fn dequeue<T>(&self, obj: &mut &mut T) -> usize {
+        unsafe {
+            dpdk_sys::rte_ring_dequeue(
+                self.ring,
+                obj as *mut &mut T as *mut *mut T as *mut *mut c_void,
             )
         }.try_into().unwrap()
     }
@@ -78,6 +96,12 @@ impl<T> RingBuf<T> {
         RingBuf {
             phantom: PhantomData,
             mempool,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        unsafe {
+            (*self.mempool).size as usize
         }
     }
 

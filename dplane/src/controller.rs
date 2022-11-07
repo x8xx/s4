@@ -8,6 +8,7 @@ use std::ffi::c_void;
 
 use crate::config::*;
 use crate::core::memory::array;
+use crate::core::memory::ring;
 use crate::core::thread::thread::spawn;
 use crate::parser::{header, parser};
 use crate::pipeline::pipeline::Pipeline;
@@ -67,12 +68,24 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         table_list.init(i, Table::new(table_conf, &header_list));
     }
 
+    // to pipeline ring list
+    let mut pipeline_ring_list = array::Array::<ring::Ring>::new(switch_config.pipeline_core_num as usize);
+    for i in 0..switch_config.pipeline_core_num as usize {
+        pipeline_ring_list.init(i, ring::Ring::new(1024));
+    }
+
+    let batch_count = 32;
+
     // rx_args_list
     let mut rx_args_list = array::Array::<worker::rx::RxArgs>::new(switch_config.interface_configs.len());
     for (i, interface_conf) in switch_config.interface_configs.iter().enumerate() {
         rx_args_list.init(i, worker::rx::RxArgs {
             name: (&interface_conf.if_name).to_string(),
             parser: parser::Parser::new(&switch_config.parser_wasm, 512, hdr_confs.len()),
+            header_list_len: header_list.len(),
+            batch_count,
+            pktbuf_len: 512,
+            pipeline_ring_list: &pipeline_ring_list,
         })
     }
 
@@ -81,6 +94,8 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     for i in 0..pipeline_args_list.len() {
         pipeline_args_list.init(i, worker::pipeline::PipelineArgs {
             pipeline: Pipeline::new(&switch_config.pipeline_wasm, &table_list),
+            ring: &pipeline_ring_list[i],
+            batch_count,
         });
     }
 
