@@ -74,6 +74,12 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         pipeline_ring_list.init(i, ring::Ring::new(1024));
     }
 
+    // to tx ring list
+    let mut tx_ring_list = array::Array::<ring::Ring>::new(switch_config.interface_configs.len());
+    for i in 0..switch_config.interface_configs.len() {
+        tx_ring_list.init(i, ring::Ring::new(1024));
+    }
+
     let batch_count = 32;
 
     // rx_args_list
@@ -81,13 +87,25 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     for (i, interface_conf) in switch_config.interface_configs.iter().enumerate() {
         rx_args_list.init(i, worker::rx::RxArgs {
             name: (&interface_conf.if_name).to_string(),
-            parser: parser::Parser::new(&switch_config.parser_wasm, 512, hdr_confs.len()),
+            parser: parser::Parser::new(&switch_config.parser_wasm),
             header_list_len: header_list.len(),
             batch_count,
             pktbuf_len: 512,
             pipeline_ring_list: &pipeline_ring_list,
         })
     }
+
+
+    // tx_args_list
+    let mut tx_args_list = array::Array::<worker::tx::TxArgs>::new(switch_config.interface_configs.len());
+    for (i, interface_conf) in switch_config.interface_configs.iter().enumerate() {
+        tx_args_list.init(i, worker::tx::TxArgs {
+            name: (&interface_conf.if_name).to_string(),
+            ring: &tx_ring_list[i],
+            batch_count,
+        })
+    }
+
 
     // pipeline_args_list
     let mut pipeline_args_list = array::Array::<worker::pipeline::PipelineArgs>::new(switch_config.pipeline_core_num as usize);

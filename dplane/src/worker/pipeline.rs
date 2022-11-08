@@ -16,11 +16,15 @@ pub struct PipelineArgs<'a> {
 }
 
 
+pub struct PipelineResult {
+
+}
+
+
 pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
     println!("Start Pipeline Core");
     let pipeline_args = unsafe { &mut *transmute::<*mut c_void, *mut PipelineArgs>(pipeline_args_ptr) };
 
-    // let mut rx_result_list = Array::<*mut RxResult>::new(pipeline_args.batch_count);
     let mut rx_result_list = Array::<&mut RxResult>::new(pipeline_args.batch_count);
     loop {
         let rx_result_dequeue_count = pipeline_args.ring.dequeue_burst::<RxResult>(&mut rx_result_list[0], pipeline_args.batch_count);
@@ -36,6 +40,8 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
             (*rx_result).owner_ring.free(rx_result_list[i]);
             println!("free {}", id);
         }
+
+        // cache ring
     }
     0
 }
