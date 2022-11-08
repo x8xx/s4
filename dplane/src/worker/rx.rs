@@ -20,6 +20,7 @@ pub struct RxArgs<'a> {
 
 pub struct RxResult<'a> {
     pub owner_ring: &'a RingBuf<RxResult<'a>>,
+    pub id: usize,
     pub pktbuf: &'a mut PktBuf,
     pub parse_result: ParseResult,
 }
@@ -38,7 +39,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
         for (i, rx_result) in rx_result_array.as_slice().iter_mut().enumerate() {
             rx_result.owner_ring = &rx_result_ring_buf;
             rx_result.pktbuf = pktbuf_list.get(i);
-            rx_result.parse_result.parse_result_of_header_list = Array::new(rx_args.header_list_len);
+            rx_result.parse_result.header_list = Array::new(rx_args.header_list_len);
         }
         rx_result_ring_buf.free_bulk(rx_result_array.as_slice(), rx_result_ring_buf.len());
         rx_result_array.free();
@@ -48,11 +49,19 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     let interface = Interface::new(&rx_args.name);
     let mut next_pipeline_core = 0;
     let mut next_pktbuf_index = 0;
+    let rx_result_ptrs_for_reset = Array::<&mut RxResult>::new(rx_args.batch_count);
+    let mut count = 0;
     loop {
         let pkt_count = interface.rx(&mut pktbuf_list[next_pktbuf_index], rx_args.batch_count);
         for i in 0..pkt_count as usize {
-            let  mut rx_result = rx_result_ring_buf.malloc();
+            count += 1;
+            // println!("count {}, pkt {}", count, pkt_count);
+            // println!("malloc");
+            let rx_result = rx_result_ring_buf.malloc();
+            rx_result.id = count;
+            // println!("malloc ok");
             let pktbuf = &rx_result.pktbuf;
+            println!("test5 {} {}", i, next_pktbuf_index);
             let (pkt, pkt_len) = pktbuf.get_raw_pkt();
             if  !rx_args.parser.parse(pkt, pkt_len, &mut rx_result.parse_result) {
                 continue;
@@ -68,7 +77,11 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
         }
 
         next_pktbuf_index += pkt_count as usize;
-        if (next_pktbuf_index + rx_args.batch_count) > pktbuf_list.len() {
+        if (next_pktbuf_index + rx_args.batch_count) >= pktbuf_list.len() {
+            let next_pktbuf_free_space = pktbuf_list.len() - next_pktbuf_index;
+            println!("reset buf index {}, {}, {}", count, next_pktbuf_index, next_pktbuf_free_space);
+            rx_result_ring_buf.malloc_bulk(rx_result_ptrs_for_reset.as_slice(), next_pktbuf_free_space);
+            rx_result_ring_buf.free_bulk(rx_result_ptrs_for_reset.as_slice(), next_pktbuf_free_space);
             next_pktbuf_index = 0;
         }
     }
