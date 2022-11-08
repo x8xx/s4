@@ -25,8 +25,16 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
     loop {
         let rx_result_dequeue_count = pipeline_args.ring.dequeue_burst::<RxResult>(&mut rx_result_list[0], pipeline_args.batch_count);
         for i in 0..rx_result_dequeue_count {
-            let rx_result = &rx_result_list[i];
-            println!("hdr len {}", (*rx_result).parse_result.hdr_len);
+            let rx_result = &mut rx_result_list[i];
+            // println!("hdr len {}", (*rx_result).parse_result.hdr_len);
+            
+            pipeline_args.pipeline.run_pipeline((*rx_result).raw_pkt, &mut (*rx_result).parse_result);
+
+
+            let id = (*rx_result).id;
+            (*rx_result).pktbuf.free();
+            (*rx_result).owner_ring.free(rx_result_list[i]);
+            println!("free {}", id);
         }
     }
     0

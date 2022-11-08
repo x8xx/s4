@@ -14,10 +14,10 @@ impl Parser {
     pub fn new(wasm: &[u8]) -> Self {
         let runtime = runtime::new_runtime!(
             wasm,
-            "read_pkt",
-            read_pkt,
-            "extract_hdr",
-            extract_hdr
+            {
+                "read_pkt" => read_pkt,
+                "extract_hdr" => extract_hdr,
+            }
         );
 
         let runtime_args = runtime::new_runtime_args!(3);

@@ -7,7 +7,7 @@ macro_rules! new_runtime_args {
 }
 
 macro_rules! new_runtime {
-    ($wasm: expr, $( $native_func_name: expr, $native_func: ident ),*) => {
+    ($wasm: expr, { $( $native_func_name: expr => $native_func: ident, )* }) => {
         {
             let llvm_compiler = wasmer_compiler_llvm::LLVM::default();
             let store = wasmer::Store::new(&wasmer::Universal::new(llvm_compiler).engine());

@@ -27,14 +27,14 @@ impl<'a> MatchKind<'a> {
                 header_list[match_field.0].fields[match_field.1].cmp_exact_match(
                     pkt,
                     &value,
-                    parse_result.parse_result_of_header_list[match_field.0].offset
+                    parse_result.header_list[match_field.0].offset
                 )
             },
             MatchKind::Lpm(match_field, _) => {
                 header_list[match_field.0].fields[match_field.1].cmp_lpm_match(
                     pkt,
                     &value,
-                    parse_result.parse_result_of_header_list[match_field.0].offset,
+                    parse_result.header_list[match_field.0].offset,
                     entry.prefix
                 )
             },
@@ -75,8 +75,8 @@ pub struct FlowEntry {
 }
 
 pub struct ActionSet {
-    action_id: u8,
-    action_data: Array<Array<u8>>,
+    pub action_id: u8,
+    pub action_data: Array<Array<i32>>,
 }
 
 
@@ -197,18 +197,4 @@ impl<'a> Table<'a> {
     pub fn delete(&mut self, entry_id: usize) {
 
     }
-}
-
-
-
-pub fn wasm_native_func_search_table(table_list_id: i64, table_id: i32, pkt_id: i64, parse_result_id: i64) -> i64 {
-    let (table, pkt, parse_result) = unsafe {
-        let table_list = &mut *(table_list_id as *mut Array<Table>);
-        let table = &mut table_list[table_id as usize];
-        let pkt = pkt_id as *const u8;
-        let parse_result = & *(parse_result_id as *const ParseResult);
-        (table, pkt, parse_result)
-    };
-
-    table.search(pkt, parse_result) as *const ActionSet as i64
 }

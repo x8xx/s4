@@ -22,6 +22,7 @@ pub struct RxResult<'a> {
     pub owner_ring: &'a RingBuf<RxResult<'a>>,
     pub id: usize,
     pub pktbuf: &'a mut PktBuf,
+    pub raw_pkt: *mut u8,
     pub parse_result: ParseResult,
 }
 
@@ -63,6 +64,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             let pktbuf = &rx_result.pktbuf;
             println!("test5 {} {}", i, next_pktbuf_index);
             let (pkt, pkt_len) = pktbuf.get_raw_pkt();
+            rx_result.raw_pkt = pkt;
             if  !rx_args.parser.parse(pkt, pkt_len, &mut rx_result.parse_result) {
                 continue;
             }
