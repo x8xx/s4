@@ -114,6 +114,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             pipeline: Pipeline::new(&switch_config.pipeline_wasm, &table_list),
             ring: &pipeline_ring_list[i],
             batch_count,
+            tx_ring_list: &tx_ring_list,
         });
     }
 

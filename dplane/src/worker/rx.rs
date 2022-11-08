@@ -26,6 +26,13 @@ pub struct RxResult<'a> {
     pub parse_result: ParseResult,
 }
 
+impl<'a> RxResult<'a> {
+    pub fn free(&mut self) {
+        self.pktbuf.free();
+        self.owner_ring.free(self);
+    }
+}
+
 pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     println!("Start Rx Core");
     let rx_args = unsafe { &mut *transmute::<*mut c_void, *mut RxArgs>(rx_args_ptr) };
