@@ -84,11 +84,55 @@ impl Field {
         }
     }
 
-    pub fn cmp_exact_match(&self, pkt: *const u8, value: &Array<u8>, offset: u16) -> bool {
+
+    pub fn cmp_pkt(&self, pkt: *const u8, hdr_offset: u16, value: &Array<u8>, end_bit_mask: u8) -> bool {
+        if self.start_byte_pos == self.end_byte_pos {
+            let pkt_first_value = unsafe {
+                *(pkt.offset((self.start_byte_pos + hdr_offset as usize) as isize)) & self.start_bit_mask
+            };
+
+            if pkt_first_value != value[0] {
+                return false;
+            }
+            return true;
+
+        } else {
+            let pkt_first_value = unsafe {
+                *(pkt.offset((self.start_byte_pos + hdr_offset as usize) as isize))
+            };
+
+            if pkt_first_value != value[0] {
+                return false;
+            }
+        }
+
+        for i in (self.start_byte_pos + 1)..self.end_byte_pos {
+            let pkt_value = unsafe {
+                *(pkt.offset((i + hdr_offset as usize) as isize))
+            };
+
+            if pkt_value != value[i - self.start_byte_pos] {
+                return false;
+            }
+
+        }
+
+        let pkt_end_value = unsafe {
+            *(pkt.offset((self.end_byte_pos + hdr_offset as usize) as isize)) & self.end_bit_mask
+        };
+
+        if pkt_end_value != value[value.len() - 1] & end_bit_mask {
+            return false;
+        }
         true
     }
 
-    pub fn cmp_lpm_match(&self, pkt: *const u8, value: &Array<u8>, offset: u16, prefix: u8) -> bool {
-        true
-    }
+
+//     pub fn cmp_exact_match(&self, pkt: *const u8, value: &Array<u8>, offset: u16) -> bool {
+//         true
+//     }
+
+//     pub fn cmp_lpm_match(&self, pkt: *const u8, value: &Array<u8>, offset: u16, prefix: u8) -> bool {
+//         true
+//     }
 }

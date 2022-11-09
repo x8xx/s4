@@ -24,19 +24,21 @@ impl<'a> MatchKind<'a> {
 
         match self {
             MatchKind::Exact(match_field, _) => {
-                header_list[match_field.0].fields[match_field.1].cmp_exact_match(
+                header_list[match_field.0].fields[match_field.1].cmp_pkt(
                     pkt,
+                    parse_result.header_list[match_field.0].offset,
                     &value,
-                    parse_result.header_list[match_field.0].offset
+                    entry.end_bit_mask
                 )
             },
             MatchKind::Lpm(match_field, _) => {
-                header_list[match_field.0].fields[match_field.1].cmp_lpm_match(
-                    pkt,
-                    &value,
-                    parse_result.header_list[match_field.0].offset,
-                    entry.prefix
-                )
+                // header_list[match_field.0].fields[match_field.1].cmp_lpm_match(
+                //     pkt,
+                //     &value,
+                //     parse_result.header_list[match_field.0].offset,
+                //     entry.prefix
+                // )
+                true
             },
         }
     }
@@ -66,13 +68,16 @@ pub struct Table<'a> {
     header_list: &'a Array<Header>,
 }
 
+
 pub struct FlowEntry {
     pub value: Option<Array<u8>>,
+    pub end_bit_mask: u8,
     pub prefix: u8,
     pub priority: u8,
     pub is_delete: bool,
     pub action: ActionSet,
 }
+
 
 pub struct ActionSet {
     pub action_id: u8,
@@ -118,8 +123,11 @@ impl<'a> Table<'a> {
         // search entry
         if self.tree_search_lock {
             let mut result_entry: Option<&FlowEntry> = None;
-            for i in 0..self.entries.len() {
+
+            // search all entry
+            for i in 0..self.len {
                 let mut success_match_count = 0;
+                // check all key
                 for j in 0..self.keys.len() {
                     let match_result = self.keys[j].is_match(
                         self.header_list,
@@ -127,9 +135,11 @@ impl<'a> Table<'a> {
                         pkt,
                         &self.entries[i],
                     );
+
                     if !match_result {
                         break;
                     }
+
                     success_match_count += 1;
                 }
 
@@ -137,6 +147,7 @@ impl<'a> Table<'a> {
                     continue;
                 }
 
+                // priority check
                 match result_entry {
                     Some(entry) => {
                         if entry.priority < self.entries[i].priority {
@@ -148,6 +159,8 @@ impl<'a> Table<'a> {
                     }
                 }
             }
+
+            // return action set
             match result_entry {
                 Some(entry) => {
                     &entry.action
