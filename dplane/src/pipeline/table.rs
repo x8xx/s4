@@ -55,6 +55,7 @@ impl<'a> MatchKind<'a> {
     // }
 }
 
+// unsafe impl<'a> Send for Table<'a> {}
 
 pub struct Table<'a> {
     entries: Array<FlowEntry>,
@@ -65,7 +66,7 @@ pub struct Table<'a> {
     len: usize,
     tree_search_lock: bool,
     tree_edit_lock: bool,
-    header_list: &'a Array<Header>,
+    header_list: Array<Header>,
 }
 
 
@@ -86,7 +87,7 @@ pub struct ActionSet {
 
 
 impl<'a> Table<'a> {
-    pub fn new(table_conf: &DpConfigTable, header_list: &'a Array<Header>) -> Self {
+    pub fn new(table_conf: &DpConfigTable, header_list: Array<Header>) -> Self {
         let mut keys = Array::<MatchKind>::new(table_conf.keys.len());
         for (i, key) in table_conf.keys.iter().enumerate() {
             let match_kind = if key.match_kind == "lpm" {
@@ -100,6 +101,7 @@ impl<'a> Table<'a> {
             };
             keys.init(i, match_kind);
         } 
+
 
         let default_action = ActionSet {
             action_id: table_conf.default_action_id as u8,
@@ -130,7 +132,7 @@ impl<'a> Table<'a> {
                 // check all key
                 for j in 0..self.keys.len() {
                     let match_result = self.keys[j].is_match(
-                        self.header_list,
+                        &self.header_list,
                         parse_result,
                         pkt,
                         &self.entries[i],

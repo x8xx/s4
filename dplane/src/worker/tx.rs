@@ -6,9 +6,9 @@ use crate::core::network::interface::Interface;
 use crate::worker::rx::RxResult;
 
 #[repr(C)]
-pub struct TxArgs<'a> {
+pub struct TxArgs {
     pub name: String,
-    pub ring: &'a Ring,
+    pub ring: Ring,
     pub batch_count: usize,
 }
 
@@ -24,6 +24,7 @@ pub extern "C" fn start_tx(tx_args_ptr: *mut c_void) -> i32 {
         for i in 0..rx_result_dequeue_count {
             let rx_result = &mut rx_result_list[i];
 
+            (*rx_result).free();
             // let id = (*rx_result).id;
             // (*rx_result).pktbuf.free();
             // (*rx_result).owner_ring.free(rx_result_list[i]);

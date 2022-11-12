@@ -2,12 +2,15 @@ use std::ptr::null_mut;
 use std::mem::size_of;
 use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::ffi::CString;
 use std::os::raw::c_char;
 
+
+#[derive(Clone)]
 pub struct Ring {
     ring: *mut dpdk_sys::rte_ring,
 }
+
+unsafe impl<'a> Send for Ring {}
 
 impl Ring {
     pub fn new(len: usize) -> Self {

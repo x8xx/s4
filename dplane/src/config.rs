@@ -10,7 +10,11 @@ pub struct SwitchConfig {
     pub parser_wasm: Vec<u8>,
     pub pipeline_wasm: Vec<u8>,
     pub listen_address: String,
+    pub cache_core_num: u8,
     pub pipeline_core_num: u8,
+    pub l1_cache_size: usize,
+    pub l2_cache_size: usize,
+    pub l3_cache_tuple_size: usize,
     pub interface_configs: Vec<InterfaceConfig>,
 }
 
@@ -97,7 +101,11 @@ pub fn parse_switch_args(args: &[String]) -> SwitchConfig {
 
 
     let listen_address = get_string_from_yaml_value(yaml_config_general, "listen_address");
+    let cache_core_num = yaml_config_general["cache_core_num"].clone().as_i64().unwrap() as u8;
     let pipeline_core_num = yaml_config_general["pipeline_core_num"].clone().as_i64().unwrap() as u8;
+    let l1_cache_size = yaml_config_general["l1_cache_size"].clone().as_i64().unwrap() as usize;
+    let l2_cache_size = yaml_config_general["l2_cache_size"].clone().as_i64().unwrap() as usize;
+    let l3_cache_tuple_size = yaml_config_general["l3_cache_tuple_size"].clone().as_i64().unwrap() as usize;
 
 
     let mut interface_configs = Vec::new();
@@ -113,8 +121,12 @@ pub fn parse_switch_args(args: &[String]) -> SwitchConfig {
         parser_wasm,
         pipeline_wasm,
         listen_address,
+        cache_core_num,
         pipeline_core_num,
-        interface_configs
+        l1_cache_size,
+        l2_cache_size,
+        l3_cache_tuple_size,
+        interface_configs,
     }
 }
 

@@ -1,3 +1,5 @@
+use std::sync::RwLock;
+
 use crate::core::memory::array::Array;
 // use crate::core::memory::ring::RingBuf;
 use crate::core::runtime::wasm::runtime;
@@ -20,12 +22,12 @@ use crate::pipeline::runtime_native_api::drop;
 pub struct Pipeline<'a> {
     runtime: runtime::Runtime,
     runtime_args: runtime::RuntimeArgs,
-    table_list: &'a Array<Table<'a>>,
+    table_list: Array<RwLock<Table<'a>>>,
 }
 
 
 impl<'a> Pipeline<'a> {
-    pub fn new(wasm: &[u8], table_list: &'a Array<Table<'a>>) -> Self {
+    pub fn new(wasm: &[u8], table_list: Array<RwLock<Table<'a>>>) -> Self {
         let runtime = runtime::new_runtime!(
             wasm,
             {
@@ -43,7 +45,7 @@ impl<'a> Pipeline<'a> {
         );
 
         let mut runtime_args = runtime::new_runtime_args!(3);
-        runtime::set_runtime_arg_i64!(runtime_args, 0, table_list as *const Array<Table> as i64);
+        runtime::set_runtime_arg_i64!(runtime_args, 0, &table_list as *const Array<RwLock<Table>> as i64);
 
         Pipeline {
             runtime,

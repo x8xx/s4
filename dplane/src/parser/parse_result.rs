@@ -2,13 +2,15 @@ use crate::core::memory::array::Array;
 
 pub struct ParseResult {
     pub metadata: Metadata,
-    pub hdr_len: usize,
+    pub hdr_size: usize,
     pub header_list: Array<Header>,
+    pub header_flag: u64,
 }
 
 pub struct Metadata {
     pub port: u8,
     pub is_drop: bool,
+    pub is_flooding: bool,
 }
 
 pub struct Header {

@@ -1,6 +1,7 @@
 use std::ops::Index;
 use std::ops::IndexMut;
 // use std::iter::Iterator;
+use std::marker::Send;
 use std::mem::size_of;
 use std::ptr::null_mut;
 use std::slice::from_raw_parts_mut;
@@ -12,6 +13,9 @@ pub struct Array<T> {
     memzone: *const dpdk_sys::rte_memzone,
     len: usize,
 }
+
+unsafe impl<T> Send for Array<T> {}
+unsafe impl<T> Sync for Array<T> {}
 
 impl<T> Array<T> {
     pub fn new(len: usize) -> Self {
@@ -71,6 +75,14 @@ impl<T> Array<T> {
             dpdk_sys::rte_memzone_free(self.memzone);
         }
     }
+
+    pub fn clone(&self) -> Self {
+        Array {
+            data: self.data,
+            memzone: self.memzone,
+            len: self.len,
+        }
+    }
 }
 
 
@@ -92,6 +104,8 @@ impl<T> IndexMut<usize> for Array<T> {
         }
     }
 }
+
+
 
 // impl<T> Iterator for Array<T> {
 //     type Item = *mut T;

@@ -2,7 +2,7 @@ mod core;
 mod config;
 mod controller;
 mod parser;
-// mod cache;
+mod cache;
 mod pipeline;
 mod worker;
 

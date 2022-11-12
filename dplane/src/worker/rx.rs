@@ -1,5 +1,6 @@
 use std::ffi::c_void;
 use std::mem::transmute;
+use std::slice::from_raw_parts;
 use crate::core::memory::ring::Ring;
 use crate::core::memory::ring::RingBuf;
 use crate::core::memory::array::Array;
@@ -7,15 +8,17 @@ use crate::core::network::pktbuf::PktBuf;
 use crate::core::network::interface::Interface;
 use crate::parser::parser::Parser;
 use crate::parser::parse_result::ParseResult;
+// use crate::cache::hash::hash_16;
+use crate::cache::hash::l1_hash_function_murmurhash3;
 
 #[repr(C)]
-pub struct RxArgs<'a> {
+pub struct RxArgs {
     pub name: String,
     pub parser: Parser,
     pub header_list_len: usize,
     pub batch_count: usize,
     pub pktbuf_len: usize,
-    pub pipeline_ring_list: &'a Array<Ring>,
+    pub pipeline_ring_list: Array<Ring>,
 }
 
 pub struct RxResult<'a> {
@@ -76,6 +79,19 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 continue;
             }
 
+
+            // l1_cache
+            // let pkt_slice = unsafe { from_raw_parts(pkt, pkt_len) };
+            let seed = 417;
+            // let l1_key = &pkt_slice[0..rx_result.parse_result.hdr_size];
+            let l1_hash = l1_hash_function_murmurhash3(pkt, rx_result.parse_result.hdr_size, seed);
+
+            // lbf
+            // let l2_key = &pkt_slice[0..rx_result.parse_result.hdr_size];
+            // let l2_hash = hash_16(l2_key, seed);
+
+
+
             rx_args.pipeline_ring_list[next_pipeline_core].enqueue(rx_result);
             next_pipeline_core += 1;
 
@@ -96,7 +112,6 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     }
     0
 }
-
 
 //            let l2_hash = murmurhash3::murmurhash3_x86_32(l2_key, 1) >> 16;
 //            println!("l2_hash {}", l2_hash);

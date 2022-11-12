@@ -1,8 +1,9 @@
 use crate::core::memory::array::Array;
 use crate::parser::header::Field;
+use crate::cache::cache::CacheElement;
 
 pub struct TupleSpace {
-    tuple_list: Array<(Tuple, Array<u8>)>,
+    tuple_list: Array<(Tuple, Array<CacheElement>)>,
     tuple_len: usize,
 }
 

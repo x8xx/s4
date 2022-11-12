@@ -12,9 +12,10 @@ use crate::core::memory::ring::Ring;
 #[repr(C)]
 pub struct PipelineArgs<'a> {
     pub pipeline: Pipeline<'a>,
-    pub ring: &'a Ring,
+    pub ring: Ring,
     pub batch_count: usize,
-    pub tx_ring_list: &'a Array<Ring>,
+    pub tx_ring_list: Array<Ring>,
+    pub cache_crater_ring: Ring,
 }
 
 
@@ -34,7 +35,6 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
             let rx_result = &mut rx_result_list[i];
             
             pipeline_args.pipeline.run_pipeline((*rx_result).raw_pkt, &mut (*rx_result).parse_result);
-
 
             if (*rx_result).parse_result.metadata.is_drop {
                 (*rx_result).free();
