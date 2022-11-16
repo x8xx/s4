@@ -17,21 +17,27 @@ struct Value {
     value: Array<u8>,
 }
 
-impl TupleSpace {
-    pub fn new() {
 
+impl TupleSpace {
+    pub fn new(len: usize) -> Self {
+        TupleSpace {
+            tuple_list: Array::new(len),
+            tuple_len: 0,
+        }
     }
 
-    pub fn search() {
-
+    pub fn search(&self) -> bool {
+        true
     }
 }
+
 
 impl Tuple {
     pub fn new() {
 
     }
 }
+
 
 impl Value {
     pub fn new() {

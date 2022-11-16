@@ -2,83 +2,35 @@ use crate::config::DpConfigTable;
 use crate::core::memory::array::Array;
 use crate::parser::header::Header;
 use crate::parser::parse_result::ParseResult;
-use crate::pipeline::binary_tree::BinaryTree;
-use crate::pipeline::radix_tree::RadixTree;
 
 
 type HeaderID = usize;
 type FieldID= usize;
 type MatchField = (HeaderID, FieldID);
 
-pub enum MatchKind<'a> {
-    Exact(MatchField, BinaryTree<'a>),
-    Lpm(MatchField, RadixTree<'a>),
+pub enum MatchKind {
+    Exact,
+    Lpm
 }
 
-impl<'a> MatchKind<'a> {
-    pub fn is_match(&self, header_list: &'a Array<Header>, parse_result: &'a ParseResult, pkt: *const u8, entry: &'a FlowEntry) -> bool {
-        let value = match &entry.value {
-            Some(value) => value,
-            None => return true,
-        };
-
-        match self {
-            MatchKind::Exact(match_field, _) => {
-                header_list[match_field.0].fields[match_field.1].cmp_pkt(
-                    pkt,
-                    parse_result.header_list[match_field.0].offset,
-                    &value,
-                    entry.end_bit_mask
-                )
-            },
-            MatchKind::Lpm(match_field, _) => {
-                // header_list[match_field.0].fields[match_field.1].cmp_lpm_match(
-                //     pkt,
-                //     &value,
-                //     parse_result.header_list[match_field.0].offset,
-                //     entry.prefix
-                // )
-                true
-            },
-        }
-    }
-
-    // pub fn tree_search(&self, pkt: *const u8) -> &FlowEntry {
-    //     match self {
-    //         MatchKind::Exact(field, tree) => {
-
-    //         },
-    //         MatchKind::Lpm(field, tree) => {
-
-    //         },
-    //     }
-    // }
-}
-
-// unsafe impl<'a> Send for Table<'a> {}
-
-pub struct Table<'a> {
+pub struct Table {
     entries: Array<FlowEntry>,
-    // delete_entry_indexes: Array<usize>,
-    keys: Array<MatchKind<'a>>,
-    // tree: &'a MatchKind<'a>,
+    keys: Array<(MatchField, MatchKind)>,
     default_action: ActionSet,
     len: usize,
-    tree_search_lock: bool,
-    tree_edit_lock: bool,
     header_list: Array<Header>,
 }
 
-
 pub struct FlowEntry {
-    pub value: Option<Array<u8>>,
-    pub end_bit_mask: u8,
-    pub prefix: u8,
+    pub values: Array<MatchFieldValue>,
     pub priority: u8,
-    pub is_delete: bool,
     pub action: ActionSet,
 }
 
+pub struct MatchFieldValue {
+    pub value: Option<Array<u8>>,
+    pub prefix_mask: u8,
+}
 
 pub struct ActionSet {
     pub action_id: u8,
@@ -86,20 +38,22 @@ pub struct ActionSet {
 }
 
 
-impl<'a> Table<'a> {
+impl Table {
     pub fn new(table_conf: &DpConfigTable, header_list: Array<Header>) -> Self {
-        let mut keys = Array::<MatchKind>::new(table_conf.keys.len());
+        let mut keys = Array::<(MatchField, MatchKind)>::new(table_conf.keys.len());
         for (i, key) in table_conf.keys.iter().enumerate() {
+            let match_field = (key.header_id as usize, key.field_id as usize);
             let match_kind = if key.match_kind == "lpm" {
-                let match_field = (key.header_id as usize, key.field_id as usize);
-                let tree = RadixTree::new(table_conf.max_size as usize);
-                MatchKind::Lpm(match_field, tree)
+                // let match_field = (key.header_id as usize, key.field_id as usize);
+                // MatchKind::Lpm(match_field)
+                MatchKind::Lpm
             } else {
-                let match_field = (key.header_id as usize, key.field_id as usize);
-                let tree = BinaryTree::new(table_conf.max_size as usize);
-                MatchKind::Exact(match_field, tree)
+                // let match_field = (key.header_id as usize, key.field_id as usize);
+                // MatchKind::Exact(match_field)
+                MatchKind::Exact
             };
-            keys.init(i, match_kind);
+            // keys.init(i, match_kind);
+            keys.init(i, (match_field, match_kind));
         } 
 
 
@@ -112,100 +66,138 @@ impl<'a> Table<'a> {
         Table {
             entries: Array::new(table_conf.max_size as usize),
             keys,
-            // tree: &keys[0],
             default_action,
             len: 0,
-            tree_search_lock: true,
-            tree_edit_lock: true,
             header_list,
         }
     }
 
-    pub fn search(&'a mut self, pkt: *const u8, parse_result: &'a ParseResult) -> &ActionSet {
-        // search entry
-        if self.tree_search_lock {
-            let mut result_entry: Option<&FlowEntry> = None;
-
-            // search all entry
-            for i in 0..self.len {
-                let mut success_match_count = 0;
-                // check all key
-                for j in 0..self.keys.len() {
-                    let match_result = self.keys[j].is_match(
-                        &self.header_list,
-                        parse_result,
-                        pkt,
-                        &self.entries[i],
-                    );
-
-                    if !match_result {
-                        break;
-                    }
-
-                    success_match_count += 1;
-                }
-
-                if success_match_count != self.keys.len() {
-                    continue;
-                }
-
-                // priority check
-                match result_entry {
-                    Some(entry) => {
-                        if entry.priority < self.entries[i].priority {
-                            result_entry = Some(&self.entries[i]);
-                        }
-                    },
-                    None => {
-                        result_entry = Some(&self.entries[i]);
-                    }
-                }
+    pub fn search(&self, pkt: *const u8, parse_result: &ParseResult) -> &ActionSet {
+        fn lpm_check(new_entry: &MatchFieldValue, old_entry: &MatchFieldValue) -> bool {
+            if new_entry.value.is_none() && !old_entry.value.is_none() {
+                return false;
+            } else if !new_entry.value.is_none() && old_entry.value.is_none() {
+                return true;
             }
 
-            // return action set
-            match result_entry {
-                Some(entry) => {
-                    &entry.action
+            match &new_entry.value {
+                Some(new_value) => {
+                    match &old_entry.value {
+                        Some(old_value) => {
+                            if new_value.len() > old_value.len() {
+                                return true;
+                            }
+
+                            if new_entry.prefix_mask > old_entry.prefix_mask {
+                                return true;
+                            }
+                        },
+                        _ => {},
+                    }
+
                 },
-                None => {
-                    &self.default_action
-                }
+                _ => {},
             }
-        } else {
-            self.tree_edit_lock = true;
-            // let entry = self.tree.tree_search(pkt);
-
-            // if filltered_entries.len() == 0 {
-            //     return &self.default_action;
-            // }
+            return false;
+        }
 
 
-            self.tree_edit_lock = false;
+        // search entry
+        let mut result_entry: Option<&FlowEntry> = None;
 
-            // &entry.action
-            &self.default_action
+
+        // search all entry
+        for i in 0..self.len {
+            let mut success_match_count = 0;
+
+            // check all key
+            for j in 0..self.keys.len() {
+                let match_field = self.keys[j].0;
+                let match_kind = &self.keys[j].1;
+
+                let value = match &self.entries[i].values[j].value {
+                    Some(value) => (value),
+                    // any
+                    None => {
+                        if let MatchKind::Lpm = match_kind {
+                            match &result_entry {
+                                Some(entry) => {
+                                    if !lpm_check(&self.entries[i].values[j], &entry.values[j]) {
+                                        break;
+                                    }
+                                    if !entry.values[j].value.is_none() {
+                                        break;
+                                    }
+                                }
+                                _ => {},
+
+                            }
+                        }
+                        success_match_count += 1;
+                        continue;
+                    },
+                };
+
+                // field match check
+                let match_result = self.header_list[match_field.0].fields[match_field.1].cmp_pkt(
+                    pkt,
+                    parse_result.header_list[match_field.0].offset,
+                    value,
+                    self.entries[i].values[j].prefix_mask
+                );
+                if !match_result {
+                    break;
+                }
+
+                // lpm check
+                if let MatchKind::Lpm = match_kind {
+                    match &result_entry {
+                        Some(entry) => {
+                            if !lpm_check(&self.entries[i].values[j], &entry.values[j]) {
+                                break;
+                            }
+                        }
+                        _ => {},
+
+                    }
+                }
+
+                success_match_count += 1;
+            }
+
+            if success_match_count != self.keys.len() {
+                continue;
+            }
+
 
             // priority check
-            // let mut max_priority_entry = entries[0];
-            // for i in 1..entries.len() {
-            //     if entries[i].priority > max_priority_entry {
-            //         max_priority_entry = entries[i];
-            //     }
-            // }
+            match result_entry {
+                Some(entry) => {
+                    if entry.priority < self.entries[i].priority {
+                        result_entry = Some(&self.entries[i]);
+                    }
+                },
+                None => {
+                    result_entry = Some(&self.entries[i]);
+                }
+            }
+        }
 
-            // max_priority_entry
+
+        // return action set
+        match result_entry {
+            Some(entry) => {
+                &entry.action
+            },
+            None => {
+                &self.default_action
+            }
         }
     }
-
 
     pub fn insert(&mut self, entry: FlowEntry) {
         self.entries[self.len] = entry;
         self.len += 1;
-
-        // self.tree_search_lock = true;
-        // while self.tree_edit_lock {}
-
-        // self.tree_search_lock = false;
     }
 
 

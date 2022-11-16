@@ -38,6 +38,7 @@ pub struct DpConfig {
 pub struct DpConfigHeader {
     pub fields: Vec<u16>,
     pub used_fields: Vec<u16>,
+    pub parse_fields: Vec<u16>,
 }
 
 #[derive(Deserialize)]

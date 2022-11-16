@@ -7,6 +7,7 @@ use crate::parser::parse_result::ParseResult;
 use crate::pipeline::table::{Table, ActionSet};
 
 // runtime native api
+use crate::pipeline::runtime_native_api::PipelineArgs;
 use crate::pipeline::runtime_native_api::debug;
 use crate::pipeline::runtime_native_api::search_table;
 use crate::pipeline::runtime_native_api::read_pkt;
@@ -19,15 +20,15 @@ use crate::pipeline::runtime_native_api::to_controller;
 use crate::pipeline::runtime_native_api::drop;
 
 
-pub struct Pipeline<'a> {
+pub struct Pipeline {
     runtime: runtime::Runtime,
     runtime_args: runtime::RuntimeArgs,
-    table_list: Array<RwLock<Table<'a>>>,
+    table_list: Array<RwLock<Table>>,
 }
 
 
-impl<'a> Pipeline<'a> {
-    pub fn new(wasm: &[u8], table_list: Array<RwLock<Table<'a>>>) -> Self {
+impl Pipeline {
+    pub fn new(wasm: &[u8], table_list: Array<RwLock<Table>>) -> Self {
         let runtime = runtime::new_runtime!(
             wasm,
             {
@@ -44,8 +45,8 @@ impl<'a> Pipeline<'a> {
             }
         );
 
-        let mut runtime_args = runtime::new_runtime_args!(3);
-        runtime::set_runtime_arg_i64!(runtime_args, 0, &table_list as *const Array<RwLock<Table>> as i64);
+        let runtime_args = runtime::new_runtime_args!(1);
+        // runtime::set_runtime_arg_i64!(runtime_args, 0, &table_list as *const Array<RwLock<Table>> as i64);
 
         Pipeline {
             runtime,
@@ -54,9 +55,17 @@ impl<'a> Pipeline<'a> {
         }
     }
 
-    pub fn run_pipeline(&mut self, pkt: *mut u8, parse_result: &mut ParseResult) {
-        runtime::set_runtime_arg_i64!(self.runtime_args, 1, pkt as i64);
-        runtime::set_runtime_arg_i64!(self.runtime_args, 2, parse_result as *mut ParseResult as i64);
+    pub fn run_pipeline(&mut self, pkt: *mut u8, parse_result: &mut ParseResult, cache_runtime_args: &mut runtime::RuntimeArgs) {
+        let pipeline_args = PipelineArgs {
+            table_list: &self.table_list,
+            pkt,
+            parse_result,
+            cache_runtime_args,
+        };
+        runtime::set_runtime_arg_i64!(self.runtime_args, 0, &pipeline_args as *const PipelineArgs as i64);
+        // runtime::set_runtime_arg_i64!(self.runtime_args, 1, pkt as i64);
+        // runtime::set_runtime_arg_i64!(self.runtime_args, 2, parse_result as *mut ParseResult as i64);
+
         runtime::call_runtime!(self.runtime, "run_pipeline", self.runtime_args);
     }
 

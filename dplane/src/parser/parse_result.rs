@@ -4,7 +4,6 @@ pub struct ParseResult {
     pub metadata: Metadata,
     pub hdr_size: usize,
     pub header_list: Array<Header>,
-    pub header_flag: u64,
 }
 
 pub struct Metadata {

@@ -1,6 +1,10 @@
 use crate::core::runtime::wasm::runtime;
+use crate::core::memory::array::Array;
+use crate::parser::header::Header;
 use crate::parser::parse_result::ParseResult;
 
+use crate::parser::runtime_native_api::ParserArgs;
+use crate::parser::runtime_native_api::get_pkt_len;
 use crate::parser::runtime_native_api::read_pkt;
 use crate::parser::runtime_native_api::extract_hdr;
 
@@ -15,12 +19,13 @@ impl Parser {
         let runtime = runtime::new_runtime!(
             wasm,
             {
+                "get_pkt_len" => get_pkt_len,
                 "read_pkt" => read_pkt,
                 "extract_hdr" => extract_hdr,
             }
         );
 
-        let runtime_args = runtime::new_runtime_args!(3);
+        let runtime_args = runtime::new_runtime_args!(1);
 
         Parser {
             runtime,
@@ -29,9 +34,15 @@ impl Parser {
     }
 
     pub fn parse(&mut self, pkt: *mut u8, pkt_len: usize, parse_result: &mut ParseResult) -> bool {
-        runtime::set_runtime_arg_i64!(self.runtime_args, 0, pkt as i64);
-        runtime::set_runtime_arg_i32!(self.runtime_args, 1, pkt_len as i32);
-        runtime::set_runtime_arg_i64!(self.runtime_args, 2, parse_result as *mut ParseResult as i64);
+        let parser_args = ParserArgs {
+            pkt,
+            pkt_len,
+            parse_result,
+        };
+        runtime::set_runtime_arg_i64!(self.runtime_args, 0, &parser_args as *const ParserArgs as i64);
+        // runtime::set_runtime_arg_i64!(self.runtime_args, 0, pkt as i64);
+        // runtime::set_runtime_arg_i32!(self.runtime_args, 1, pkt_len as i32);
+        // runtime::set_runtime_arg_i64!(self.runtime_args, 2, parse_result as *mut ParseResult as i64);
 
         let is_accept = runtime::call_runtime_i32!(self.runtime, "parse", self.runtime_args);
         if is_accept == 1 {

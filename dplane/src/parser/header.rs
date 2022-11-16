@@ -1,24 +1,28 @@
 use crate::core::memory::array::Array;
 
+
 pub struct Header {
     pub fields: Array<Field>,
     pub used_fields: Array<Field>,
+    pub parse_fields: Array<Field>,
     pub fields_len: usize,
     pub used_fields_len: usize,
 }
 
 #[derive(Clone, Copy)]
 pub struct Field {
-    pub start_byte_pos: usize,
-    pub start_bit_mask: u8,
-    pub end_byte_pos: usize,
-    pub end_bit_mask: u8,
+    start_byte_pos: usize,
+    start_bit_mask: u8,
+    end_byte_pos: usize,
+    end_bit_mask: u8,
 }
 
+
 impl Header {
-    pub fn new(field_len_list: &[u16], used_field_len_list: &[u16]) -> Self {
+    pub fn new(field_len_list: &[u16], used_field_index_list: &[u16], parse_field_index_list: &[u16]) -> Self {
         let mut fields = Array::<Field>::new(field_len_list.len());
-        let mut used_fields = Array::<Field>::new(used_field_len_list.len());
+        let mut used_fields = Array::<Field>::new(used_field_index_list.len());
+        let mut parse_fields = Array::<Field>::new(parse_field_index_list.len());
         
         let mut pre_field = &Field {
             start_byte_pos: 0,
@@ -32,18 +36,25 @@ impl Header {
             pre_field = &fields[i];
         } 
 
-        for (i, field_index) in used_field_len_list.iter().enumerate() {
+        for (i, field_index) in used_field_index_list.iter().enumerate() {
             used_fields[i] = fields[*field_index as usize].clone();
         }
+
+        for (i, field_index) in parse_field_index_list.iter().enumerate() {
+            parse_fields[i] = fields[*field_index as usize].clone();
+        }
+
 
         Header {
             fields,
             used_fields,
+            parse_fields,
             fields_len: field_len_list.len(),
-            used_fields_len: used_field_len_list.len(),
+            used_fields_len: used_field_index_list.len(),
         }
     }
 }
+
 
 impl Field {
     pub fn new(pre_field: &Field, field_bit_size: u16) -> Self {
@@ -85,7 +96,29 @@ impl Field {
     }
 
 
+    pub fn copy_ptr_value(&self, base_offset: isize, src: *mut u8, dst: *mut u8) -> isize {
+        unsafe {
+            if self.start_byte_pos == self.end_byte_pos {
+                *dst = *src.offset(base_offset + self.start_byte_pos as isize) ^ self.start_bit_mask;
+                return 1;
+            }
+            *dst = *src.offset(base_offset + self.start_byte_pos as isize) ^ self.start_bit_mask;
+
+            let mut dst_offset = 1;
+            for i in (base_offset + self.start_byte_pos as isize + 1)..(base_offset+ self.end_byte_pos as isize) {
+                *dst.offset(dst_offset) = *src.offset(i);
+                dst_offset += 1;
+            }
+
+
+            *dst.offset(dst_offset) = *src.offset(base_offset + self.end_byte_pos as isize) ^ self.end_bit_mask;
+            dst_offset
+        }
+    }
+
+
     pub fn cmp_pkt(&self, pkt: *const u8, hdr_offset: u16, value: &Array<u8>, end_bit_mask: u8) -> bool {
+        // start
         if self.start_byte_pos == self.end_byte_pos {
             let pkt_first_value = unsafe {
                 *(pkt.offset((self.start_byte_pos + hdr_offset as usize) as isize)) & self.start_bit_mask
@@ -106,6 +139,8 @@ impl Field {
             }
         }
 
+
+        // middle
         for i in (self.start_byte_pos + 1)..self.end_byte_pos {
             let pkt_value = unsafe {
                 *(pkt.offset((i + hdr_offset as usize) as isize))
@@ -117,6 +152,8 @@ impl Field {
 
         }
 
+
+        // end
         let pkt_end_value = unsafe {
             *(pkt.offset((self.end_byte_pos + hdr_offset as usize) as isize)) & self.end_bit_mask
         };
@@ -126,13 +163,4 @@ impl Field {
         }
         true
     }
-
-
-//     pub fn cmp_exact_match(&self, pkt: *const u8, value: &Array<u8>, offset: u16) -> bool {
-//         true
-//     }
-
-//     pub fn cmp_lpm_match(&self, pkt: *const u8, value: &Array<u8>, offset: u16, prefix: u8) -> bool {
-//         true
-//     }
 }
