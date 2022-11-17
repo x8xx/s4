@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 pnet = "0.30.0"
 argh = "0.1.8"
+rust-dpdk-sys = { git = "https://github.com/x8xx/rust-dpdk.git", rev = "3c72af1a8c1549105c1112285ebba4feaca0a4b5" }
 # modular-bitfield = "0.11.2"
 modular-bitfield-msb = { git = "https://github.com/CirrusNeptune/modular-bitfield-msb.git", rev = "37d054dcd9b5653fa8aa3148d9cc23f082b1a8cc" }
 yaml-rust = "0.4.5"
