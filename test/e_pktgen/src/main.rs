@@ -23,7 +23,12 @@ fn main() {
     let config_path = &pktgen_args[0];
     let config = YamlLoader::load_from_str(&fs::read_to_string(config_path).unwrap().to_string()).unwrap();
 
-    let interface = dpdk::interface::Interface::new("test");
+    // get config
+    let general_config = &config[0]["general"];
+    let name = general_config["interface"].clone().into_string().unwrap();
+
+    let interface = dpdk::interface::Interface::new(&name);
+
 
     // gen::gen(&mut device, &config[0], methods);
 
