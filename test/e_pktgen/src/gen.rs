@@ -26,6 +26,7 @@ pub struct GenArgs {
 }
 
 
-pub extern "C" fn start_gen(tx_args_ptr: *mut c_void) -> i32 {
+pub extern "C" fn start_gen(gen_args_ptr: *mut c_void) -> i32 {
+    println!("start gen thread");
     0
 }

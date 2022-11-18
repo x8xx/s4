@@ -15,3 +15,10 @@ pub fn spawn(func: extern "C" fn(*mut c_void) -> i32, args: *mut c_void) -> bool
         result == 0
     }
 }
+
+
+pub fn thread_wait() {
+    unsafe {
+        dpdk_sys::rte_eal_mp_wait_lcore();
+    }
+}

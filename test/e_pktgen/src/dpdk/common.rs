@@ -22,6 +22,7 @@ pub fn init() -> i32 {
     unsafe {
         dpdk_sys::load_rte_virtio_pci_eth_dev();
         dpdk_sys::load_rte_eth_tap();
+        dpdk_sys::load_qede_ethdev();
     }
 
     unsafe {

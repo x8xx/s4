@@ -10,6 +10,7 @@ mod rx;
 
 use std::env;
 use std::fs;
+use std::ffi::c_void;
 use std::collections::HashMap;
 use yaml_rust::YamlLoader;
 use crate::method::FnMethod;
@@ -26,15 +27,25 @@ fn main() {
     // get config
     let general_config = &config[0]["general"];
     let name = general_config["interface"].clone().into_string().unwrap();
+    println!("interface_name: {}", name);
 
     let interface = dpdk::interface::Interface::new(&name);
 
+    let gen_args = gen::GenArgs {
 
-    // gen::gen(&mut device, &config[0], methods);
+    };
+
+    if !dpdk::thread::spawn(gen::start_gen, &gen_args as *const gen::GenArgs as *mut c_void) {
+        dpdk::common::cleanup();
+        panic!("faild start thread gen");
+    }
+
 
     // let mut methods: HashMap<&str, FnMethod> = HashMap::new();
     // methods.insert("tcp", method::tcp::gen_tcp_packet);
     // run::run(methods);
 
+    
+    dpdk::thread::thread_wait();
     dpdk::common::cleanup();
 }
