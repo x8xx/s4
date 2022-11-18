@@ -381,7 +381,7 @@ dependencies = [
 [[package]]
 name = "modular-bitfield-msb"
 version = "0.11.2"
-source = "git+https://github.com/CirrusNeptune/modular-bitfield-msb.git?rev=37d054dcd9b5653fa8aa3148d9cc23f082b1a8cc#37d054dcd9b5653fa8aa3148d9cc23f082b1a8cc"
+source = "git+https://github.com/x8xx/modular-bitfield-msb.git?rev=37d054dcd9b5653fa8aa3148d9cc23f082b1a8cc#37d054dcd9b5653fa8aa3148d9cc23f082b1a8cc"
 dependencies = [
  "modular-bitfield-msb-impl",
  "static_assertions",
@@ -390,7 +390,7 @@ dependencies = [
 [[package]]
 name = "modular-bitfield-msb-impl"
 version = "0.11.2"
-source = "git+https://github.com/CirrusNeptune/modular-bitfield-msb.git?rev=37d054dcd9b5653fa8aa3148d9cc23f082b1a8cc#37d054dcd9b5653fa8aa3148d9cc23f082b1a8cc"
+source = "git+https://github.com/x8xx/modular-bitfield-msb.git?rev=37d054dcd9b5653fa8aa3148d9cc23f082b1a8cc#37d054dcd9b5653fa8aa3148d9cc23f082b1a8cc"
 dependencies = [
  "proc-macro2 1.0.42",
  "quote 1.0.20",

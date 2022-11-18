@@ -4,6 +4,7 @@ use std::os::raw::c_char;
 use crate::dpdk::pktbuf;
 
 
+#[derive(Clone)]
 pub struct Interface {
     port_number: u16,
 }
@@ -78,7 +79,7 @@ impl Interface {
         }
     }
 
-    pub fn rx(&self, pktbuf: &mut pktbuf::PktBuf, len: usize) -> u16 {
+    pub fn rx(&self, pktbuf: &mut pktbuf::PktBuf, len: u16) -> u16 {
         unsafe {
             // dpdk_sys::rte_eth_rx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16);
             dpdk_sys::rte_eth_rx_burst(
@@ -90,15 +91,15 @@ impl Interface {
         }
     }
 
-    pub fn tx(&self, pktbuf: &mut pktbuf::PktBuf) {
+    pub fn tx(&self, pktbuf: &mut pktbuf::PktBuf, len: u16) -> u16 {
         unsafe {
             // dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.pkt_count as u16);
             dpdk_sys::rte_eth_tx_burst(
                 self.port_number,
                 0,
                 pktbuf as *mut pktbuf::PktBuf as *mut *mut dpdk_sys::rte_mbuf,
-                1
-            );
+                len as u16,
+            )
         }
     }
 }

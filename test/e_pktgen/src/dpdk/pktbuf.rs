@@ -25,9 +25,9 @@ impl PktBuf {
         }
     }
 
-    pub fn free(&self) {
+    pub fn free(&self, len: u32) {
         unsafe {
-            dpdk_sys::rte_pktmbuf_free(self.buf);
+            dpdk_sys::rte_pktmbuf_free_bulk(self as *const PktBuf as *mut *mut dpdk_sys::rte_mbuf , len);
         }
     }
 }
