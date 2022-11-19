@@ -24,7 +24,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     let end_time = Instant::now() + Duration::from_secs(rx_args.execution_time);
     loop {
         let pkt_count = rx_args.interface.rx(&mut pktbuf_list[0], 32);
-        println!("? {}", pkt_count);
+        // println!("? {}", pkt_count);
         counter += pkt_count as u64;
         pktbuf_list[0].free(pkt_count as u32);
 

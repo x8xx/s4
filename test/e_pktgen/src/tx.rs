@@ -36,8 +36,8 @@ pub extern "C" fn start_tx(tx_args_ptr: *mut c_void) -> i32 {
     let end_time = Instant::now() + Duration::from_secs(tx_args.execution_time + 5);
     loop {
         let pkt_count = tap_interface.rx(&mut pktbuf_list[0], 32);
-        tx_args.interface.tx(&mut pktbuf_list[0], pkt_count);
-        pktbuf_list[0].free(pkt_count as u32);
+        let c = tx_args.interface.tx(&mut pktbuf_list[0], pkt_count);
+        // println!("{}", c);
 
         if end_time < Instant::now() {
             break;

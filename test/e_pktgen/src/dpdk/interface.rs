@@ -75,13 +75,33 @@ impl Interface {
 
             }
 
-            dpdk_sys::rte_eth_promiscuous_enable(port_number);
+            if dpdk_sys::rte_eth_promiscuous_enable(port_number) < 0 {
+                panic!("Error rte_eth_promiscuous_enable\n");
+            }
+
+
+            let mut port_info: dpdk_sys::rte_eth_dev_info = Default::default();
+            if dpdk_sys::rte_eth_dev_info_get(port_number, &mut port_info as *mut dpdk_sys::rte_eth_dev_info) < 0 {
+                println!("failed: get port info");
+            } else {
+                println!("port{}: max rx queues {}", port_number, port_info.max_rx_queues);
+                println!("port{}: max tx queues {}", port_number, port_info.max_tx_queues);
+                println!("port{}: min mtu {}", port_number, port_info.min_mtu);
+                println!("port{}: max mtu {}", port_number, port_info.max_mtu);
+            }
+
+            let mut link : dpdk_sys::rte_eth_link = Default::default();
+            if dpdk_sys::rte_eth_link_get(port_number, &mut link as *mut dpdk_sys::rte_eth_link) < 0 {
+                println!("failed: get port link info");
+            } else {
+                println!("port{}: link {}", port_number,  if link.link_status() == 1 { "up" } else { "down" });
+                println!("port{}: link spped {}", port_number,  link.link_speed);
+            }
         }
     }
 
     pub fn rx(&self, pktbuf: &mut pktbuf::PktBuf, len: u16) -> u16 {
         unsafe {
-            // dpdk_sys::rte_eth_rx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16);
             dpdk_sys::rte_eth_rx_burst(
                 self.port_number,
                 0,
@@ -93,7 +113,6 @@ impl Interface {
 
     pub fn tx(&self, pktbuf: &mut pktbuf::PktBuf, len: u16) -> u16 {
         unsafe {
-            // dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.pkt_count as u16);
             dpdk_sys::rte_eth_tx_burst(
                 self.port_number,
                 0,
