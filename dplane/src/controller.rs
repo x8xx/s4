@@ -41,8 +41,13 @@ fn cp_stream_handler(mut stream: TcpStream, table_list: Array<RwLock<Table>>) ->
  *
  */
 fn create_new_cache(ring: ring::Ring) {
+    let new_cache_list = Array::<&mut worker::pipeline::NewCacheElement>::new(32);
     loop {
-
+        let new_cache_dequeue_count = ring.dequeue_burst::<worker::pipeline::NewCacheElement>(&new_cache_list, 32);
+        for i in 0..new_cache_dequeue_count {
+            let new_cache = new_cache_list.get(i);
+            new_cache.free();
+        }
     }
 }
 
@@ -131,6 +136,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             ring: pipeline_ring_list[i].clone(),
             batch_count: pipeline_batch_count,
             table_list_len: table_list.len(),
+            hdr_max_len: 128,
             tx_ring_list: tx_ring_list.clone(),
             cache_creater_ring: cache_creater_ring.clone(),
         });

@@ -22,6 +22,7 @@ pub struct PipelineArgs {
 
     pub batch_count: usize,
     pub table_list_len: usize,
+    pub hdr_max_len: usize,
 
     pub tx_ring_list: Array<Ring>,
     pub cache_creater_ring: Ring,
@@ -48,6 +49,8 @@ impl PipelineResult {
 pub struct NewCacheElement {
     pub owner_ring: *mut RingBuf<NewCacheElement>,
     pub rx_id: usize,
+    pub l1_key: Array<u8>,
+    pub l1_key_len: usize,
     pub cache_id: usize,
     pub cache_data: CacheData,
     pub cache_calc_result: *const HashCalcResult
@@ -78,6 +81,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
     let mut new_cache_element_ringbuf = RingBuf::<NewCacheElement>::new(1024);
     init_ringbuf_element!(new_cache_element_ringbuf, NewCacheElement, {
         owner_ring => &mut new_cache_element_ringbuf as *mut RingBuf<NewCacheElement>,
+        l1_key => Array::new(pipeline_args.hdr_max_len),
         cache_data => Array::new(pipeline_args.table_list_len),
     });
 
@@ -150,6 +154,12 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 let new_cache_element = new_cache_element_ringbuf.malloc();
                 pipeline_args.pipeline.run_pipeline(*raw_pkt, parse_result, &mut new_cache_element.cache_data, &mut pipeline_result.tx_conf);
 
+                new_cache_element.l1_key_len = parse_result.hdr_size;
+                for i in 0..new_cache_element.l1_key_len {
+                    unsafe {
+                        new_cache_element.l1_key[i] = *raw_pkt.offset(i as isize);
+                    }
+                }
                 new_cache_element.rx_id = *rx_id;
                 new_cache_element.cache_id = *cache_id;
                 new_cache_element.cache_calc_result = *hash_calc_result as *const HashCalcResult;
