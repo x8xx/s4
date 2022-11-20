@@ -3,6 +3,8 @@ use std::ptr::null_mut;
 use std::os::raw::c_char;
 use crate::core::network::pktbuf;
 
+
+#[derive(Clone)]
 pub struct Interface {
     port_number: u16,
 }
@@ -12,7 +14,7 @@ impl Interface {
         let port_number = Interface::find_interface_from_name(name);     
         let mempool = unsafe {
             dpdk_sys::rte_pktmbuf_pool_create(
-                crate::core::helper::dpdk::gen_random_name() .as_ptr() as *mut c_char,
+                crate::core::helper::dpdk::gen_random_name().as_ptr() as *mut c_char,
                 8192,
                 256,
                 0,
@@ -89,10 +91,15 @@ impl Interface {
         }
     }
 
-    pub fn tx(&self, pktbuf: &pktbuf::PktBuf) -> u16 {
+    pub fn tx(&self, pktbuf: &mut pktbuf::PktBuf) {
         unsafe {
-            // dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.pkt_count as u16)
-            0
+            // dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.pkt_count as u16);
+            dpdk_sys::rte_eth_tx_burst(
+                self.port_number,
+                0,
+                pktbuf as *mut pktbuf::PktBuf as *mut *mut dpdk_sys::rte_mbuf,
+                1
+            );
         }
     }
 }

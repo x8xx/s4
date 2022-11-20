@@ -7,6 +7,7 @@ use std::net::TcpStream;
 use std::ffi::c_void;
 
 use crate::config::*;
+use crate::core::network::interface::Interface;
 use crate::core::memory::array::Array;
 use crate::core::memory::ring;
 use crate::core::thread::thread::spawn;
@@ -22,7 +23,6 @@ use crate::worker;
 /**
  * DataPlane to ControlPlane
  */
-// fn cp_stream_handler(mut stream: TcpStream, table_list_ptr: Arc<Mutex<Array<Table>>>) -> Result<(), Error> {
 fn cp_stream_handler(mut stream: TcpStream, table_list: Array<RwLock<Table>>) -> Result<(), Error> {
     let mut buffer = [0; 1024];
     loop {
@@ -85,6 +85,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         header_list.init(i, header::Header::new(&hdr_conf.fields, &hdr_conf.used_fields, &hdr_conf.parse_fields));
     }
 
+
     //table_list
     let table_confs = &dp_config.tables;
     // let table_list = Arc::new(Array::<RwLock<Table>>::new(table_confs.len()));
@@ -93,20 +94,19 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         table_list.init(i, RwLock::new(Table::new(table_conf, header_list.clone())));
     }
 
+
     let interface_configs_len = switch_config.interface_configs.len();
 
     // cache 
     let mut l1_cache_list = Array::<Array<CacheElement>>::new(interface_configs_len);
-    let mut lbf_list = Array::<Array<u8>>::new(interface_configs_len);
+    let mut lbf_list = Array::<Array<u64>>::new(interface_configs_len);
     let mut l2_cache_list = Array::<Array<Array<CacheElement>>>::new(interface_configs_len);
     let mut l3_cache = TupleSpace::new(100000);
 
 
     // to main core ring 
     let cache_creater_ring = ring::Ring::new(1024);
-    // let mut main_core_ringsend = ring::RingSend {
-    //     ring: &mut main_core_ring as *mut ring::Ring,
-    // };
+
 
     let rx_batch_count = 32;
     let cache_batch_count = 32;
@@ -130,8 +130,9 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             pipeline: Pipeline::new(&switch_config.pipeline_wasm, table_list.clone()),
             ring: pipeline_ring_list[i].clone(),
             batch_count: pipeline_batch_count,
+            table_list_len: table_list.len(),
             tx_ring_list: tx_ring_list.clone(),
-            cache_crater_ring: cache_creater_ring.clone(),
+            cache_creater_ring: cache_creater_ring.clone(),
         });
     }
 
@@ -158,14 +159,17 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             });
         }
 
+        let interface = Interface::new(&interface_conf.if_name);
         l1_cache_list.init(i, Array::new(switch_config.l1_cache_size));
         lbf_list.init(i, Array::new(switch_config.l2_cache_size));
         rx_args_list.init(i, worker::rx::RxArgs {
             id: i,
-            name: (&interface_conf.if_name).to_string(),
+            interface: interface.clone(),
             parser: parser::Parser::new(&switch_config.parser_wasm),
             batch_count: rx_batch_count,
             pktbuf_len: 512,
+            l1_hash_seed: 417,
+            l2_hash_seed: 417,
             l1_cache: l1_cache_list[i].clone(),
             lbf:  lbf_list[i].clone(),
             l2_key_max_len: 30,
@@ -176,7 +180,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
 
 
         tx_args_list.init(i, worker::tx::TxArgs {
-            name: (&interface_conf.if_name).to_string(),
+            interface: interface.clone(),
             ring: tx_ring_list[i].clone(),
             batch_count: tx_batch_count,
         });
@@ -214,5 +218,4 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             _ => {},
         }
     }
-
 }

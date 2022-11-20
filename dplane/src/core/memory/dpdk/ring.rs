@@ -3,6 +3,7 @@ use std::mem::size_of;
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::os::raw::c_char;
+use crate::core::memory::array::Array;
 
 
 #[derive(Clone)]
@@ -42,11 +43,12 @@ impl Ring {
         }.try_into().unwrap()
     }
 
-    pub fn dequeue_burst<T>(&self, objs: &mut &mut T, len: usize) -> usize {
+    // pub fn dequeue_burst<T>(&self, objs: &mut &mut T, len: usize) -> usize {
+    pub fn dequeue_burst<T>(&self, objs: &Array<&mut T>, len: usize) -> usize {
         unsafe {
             dpdk_sys::rte_ring_dequeue_burst(
                 self.ring,
-                objs as *mut &mut T as *mut *mut T as *mut *mut c_void,
+                objs.as_ptr() as *mut *mut T as *mut *mut c_void,
                 len as u32,
                 null_mut()
             )
@@ -135,5 +137,45 @@ impl<T> RingBuf<T> {
             dpdk_sys::rte_mempool_put(self.mempool, obj as *mut T as *mut c_void);
         }
     }
+}
+
+macro_rules! malloc_ringbuf_all_element {
+    ($ringbuf: expr, $T: ident) => {
+        {
+            let ptr_array = Array::<&mut $T>:: new($ringbuf.len()); 
+            $ringbuf.malloc_bulk(ptr_array.as_slice(), ptr_array.len());
+            ptr_array
+        }
+    }
 
 }
+
+macro_rules! free_ringbuf_all_element {
+    ($ringbuf: expr, $ptr_array: expr) => {
+        $ringbuf.free_bulk($ptr_array.as_slice(), $ptr_array.len());
+        $ptr_array.free();
+    }
+
+}
+
+macro_rules! init_ringbuf_element {
+    ($ringbuf: expr, $T: ident, { $( $field: ident => $value: expr, )* }) =>  {
+        {
+            let ptr_array = Array::<&mut $T>:: new($ringbuf.len()); 
+            $ringbuf.malloc_bulk(ptr_array.as_slice(), ptr_array.len());
+
+            for (_, element) in ptr_array.as_slice().iter_mut().enumerate() {
+                $(
+                    element.$field = $value;
+                )*
+            }
+
+            $ringbuf.free_bulk(ptr_array.as_slice(), ptr_array.len());
+            ptr_array.free();
+        }
+    }
+}
+
+pub(crate) use init_ringbuf_element;
+pub(crate) use malloc_ringbuf_all_element;
+pub(crate) use free_ringbuf_all_element;

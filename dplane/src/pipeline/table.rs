@@ -32,6 +32,8 @@ pub struct MatchFieldValue {
     pub prefix_mask: u8,
 }
 
+
+#[derive(Clone)]
 pub struct ActionSet {
     pub action_id: u8,
     pub action_data: Array<Array<i32>>,

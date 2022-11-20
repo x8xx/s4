@@ -4,6 +4,7 @@ use std::ptr::null_mut;
 use crate::core::memory::array;
 
 
+#[derive(Clone)]
 pub struct PktBuf {
     pub buf: *mut dpdk_sys::rte_mbuf,
 }

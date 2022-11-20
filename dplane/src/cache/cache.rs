@@ -1,9 +1,13 @@
-use crate::core::runtime::wasm::runtime::RuntimeArgs;
+use crate::core::memory::array::Array;
+use crate::pipeline::table::ActionSet;
+
+
+pub type CacheData = Array<ActionSet>;
 
 pub struct CacheElement {
     pub key: *const u8,
     pub key_len: isize,
-    pub runtime_args: RuntimeArgs,
+    pub data: CacheData,
 }
 
 impl CacheElement {

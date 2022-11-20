@@ -1,8 +1,5 @@
 use crate::core::runtime::wasm::runtime;
-use crate::core::memory::array::Array;
-use crate::parser::header::Header;
 use crate::parser::parse_result::ParseResult;
-
 use crate::parser::runtime_native_api::ParserArgs;
 use crate::parser::runtime_native_api::get_pkt_len;
 use crate::parser::runtime_native_api::read_pkt;
