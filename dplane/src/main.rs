@@ -11,6 +11,8 @@ use std::env;
 fn main() {
     #[cfg(feature="dpdk")]
     let switch_args_start_index = core::helper::dpdk::init();
+    #[cfg(feature="linux")]
+    let switch_args_start_index = 0;
 
     let args: Vec<String> = env::args().collect();
     let switch_args: &[String] = &args[switch_args_start_index as usize..];
