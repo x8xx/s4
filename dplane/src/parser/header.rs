@@ -59,21 +59,43 @@ impl Header {
 impl Field {
     pub fn new(pre_field: &Field, field_bit_size: u16) -> Self {
         let mask_list = [128, 192, 224, 240, 248, 252, 254];
-        let (start_byte_pos, start_bit_mask, readed_bit): (usize, u8, u16) = if pre_field.end_bit_mask == 0xff {
+        let (start_byte_pos, start_bit_mask, readed_bit): (usize, u8, u16) = if (pre_field.end_bit_mask & 1) == 1 {
             if field_bit_size >= 8 {
                 (pre_field.end_byte_pos + 1, 0xff, 8)
             } else {
                 (pre_field.end_byte_pos+ 1, mask_list[field_bit_size as usize - 1], field_bit_size)
             }
         } else {
-            let pre_end_bit_count = (pre_field.end_bit_mask as u64).count_ones();
-            let bit_space = 8 - pre_end_bit_count;
-            if bit_space > field_bit_size as u32 {
-                (pre_field.end_byte_pos, mask_list[field_bit_size as usize - 1] >> pre_end_bit_count, field_bit_size)
+            let pre_end_bit_start_pos = if pre_field.end_bit_mask >= 128 {
+                8
+            } else if pre_field.end_bit_mask >= 64 {
+                7
+            } else if pre_field.end_bit_mask >= 32 {
+                6
+            } else if pre_field.end_bit_mask >= 16 {
+                5
+            } else if pre_field.end_bit_mask >= 8 {
+                4
+            } else if pre_field.end_bit_mask >= 4 {
+                3
+            } else if pre_field.end_bit_mask >= 2 {
+                2
+            } else if pre_field.end_bit_mask >= 1 {
+                1
             } else {
-                (pre_field.end_byte_pos, pre_field.end_bit_mask ^ 0xff, bit_space as u16)
+                8
+            };
+            let pre_end_bit_count = (pre_field.end_bit_mask as u64).count_ones();
+
+            let bit_space = pre_end_bit_start_pos - pre_end_bit_count;
+            if bit_space > field_bit_size as u32 {
+                (pre_field.end_byte_pos, mask_list[field_bit_size as usize - 1] >> ((8 - pre_end_bit_start_pos) + pre_end_bit_count), field_bit_size)
+            } else {
+                let xor_mask = [0xff, 0x7f, 0x3f, 0x1f, 0xf, 0x7, 0x3, 0x1];
+                (pre_field.end_byte_pos, pre_field.end_bit_mask ^ xor_mask[(8 - pre_end_bit_start_pos) as usize], bit_space as u16)
             }
         };
+
 
         let field_bit_size = field_bit_size - readed_bit;
         let (end_byte_pos, end_bit_mask): (usize, u8) = if field_bit_size == 0 {
@@ -86,6 +108,7 @@ impl Field {
                 (start_byte_pos + ((field_bit_size / 8) as usize) + 1, mask_list[residue_bit as usize - 1])
             }
         };
+
 
         Field {
             start_byte_pos,
@@ -162,5 +185,75 @@ impl Field {
             return false;
         }
         true
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::Field;
+
+    #[test]
+    pub fn test_field_new() {
+        let mut field = Field {
+            start_byte_pos: 0,
+            start_bit_mask: 0,
+            end_byte_pos: 0,
+            end_bit_mask: 0,
+        };
+
+        field = Field::new(&field, 48);
+        assert_eq!(field.start_byte_pos, 0);
+        assert_eq!(field.start_bit_mask, 0xff);
+        assert_eq!(field.end_byte_pos, 5);
+        assert_eq!(field.end_bit_mask, 0xff);
+
+        field = Field::new(&field, 48);
+        assert_eq!(field.start_byte_pos, 6);
+        assert_eq!(field.start_bit_mask, 0xff);
+        assert_eq!(field.end_byte_pos, 11);
+        assert_eq!(field.end_bit_mask, 0xff);
+
+        field = Field::new(&field, 8);
+        assert_eq!(field.start_byte_pos, 12);
+        assert_eq!(field.start_bit_mask, 0xff);
+        assert_eq!(field.end_byte_pos, 12);
+        assert_eq!(field.end_bit_mask, 0xff);
+
+        field = Field::new(&field, 1);
+        assert_eq!(field.start_byte_pos, 13);
+        assert_eq!(field.start_bit_mask, 0x80);
+        assert_eq!(field.end_byte_pos, 13);
+        assert_eq!(field.end_bit_mask, 0x80);
+
+        field = Field::new(&field, 2);
+        assert_eq!(field.start_byte_pos, 13);
+        assert_eq!(field.start_bit_mask, 0x60);
+        assert_eq!(field.end_byte_pos, 13);
+        assert_eq!(field.end_bit_mask, 0x60);
+
+        field = Field::new(&field, 16);
+        assert_eq!(field.start_byte_pos, 13);
+        assert_eq!(field.start_bit_mask, 0x1F);
+        assert_eq!(field.end_byte_pos, 15);
+        assert_eq!(field.end_bit_mask, 0xE0);
+
+        field = Field::new(&field, 2);
+        assert_eq!(field.start_byte_pos, 15);
+        assert_eq!(field.start_bit_mask, 0x18);
+        assert_eq!(field.end_byte_pos, 15);
+        assert_eq!(field.end_bit_mask, 0x18);
+
+        field = Field::new(&field, 3);
+        assert_eq!(field.start_byte_pos, 15);
+        assert_eq!(field.start_bit_mask, 0x7);
+        assert_eq!(field.end_byte_pos, 15);
+        assert_eq!(field.end_bit_mask, 0x7);
+
+        field = Field::new(&field, 8);
+        assert_eq!(field.start_byte_pos, 16);
+        assert_eq!(field.start_bit_mask, 0xff);
+        assert_eq!(field.end_byte_pos, 16);
+        assert_eq!(field.end_bit_mask, 0xff);
     }
 }
