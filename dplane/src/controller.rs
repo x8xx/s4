@@ -1,11 +1,12 @@
-use std::io::prelude::*;
+mod cmd;
+mod cp_stream;
+mod table_controller;
+mod cache_controller;
+
 use std::thread;
 use std::sync::RwLock;
-use std::io::Error;
 use std::net::TcpListener;
-use std::net::TcpStream;
 use std::ffi::c_void;
-
 use crate::config::*;
 use crate::core::network::interface::Interface;
 use crate::core::memory::array::Array;
@@ -18,62 +19,6 @@ use crate::cache::tss::TupleSpace;
 use crate::pipeline::pipeline::Pipeline;
 use crate::pipeline::table::Table;
 use crate::worker;
-
-
-/**
- * DataPlane to ControlPlane
- */
-fn cp_stream_handler(mut stream: TcpStream, table_list: Array<RwLock<Table>>) -> Result<(), Error> {
-    let mut buffer = [0; 1024];
-    loop {
-        let nbytes = stream.read(&mut buffer)?;
-        if nbytes == 0 {
-            return Ok(());
-        }
-
-        stream.write(&buffer[..nbytes])?;
-        stream.flush()?;
-    }
-}
-
-
-/**
- *
- */
-fn create_new_cache(ring: ring::Ring) {
-    let new_cache_list = Array::<&mut worker::pipeline::NewCacheElement>::new(32);
-    loop {
-        let new_cache_dequeue_count = ring.dequeue_burst::<worker::pipeline::NewCacheElement>(&new_cache_list, 32);
-        for i in 0..new_cache_dequeue_count {
-            let new_cache = new_cache_list.get(i);
-            new_cache.free();
-        }
-    }
-}
-
-
-/**
- * start worker
- */
-struct WorkerArgs {
-    rx_args_list: Array<worker::rx::RxArgs>,
-    pipeline_args_list: Array<worker::pipeline::PipelineArgs>,
-    tx_args_list: Array<worker::tx::TxArgs>,
-}
-
-fn start_workers(worker_args: &mut WorkerArgs) {
-    for i in 0..worker_args.rx_args_list.len() {
-        spawn(worker::rx::start_rx, &mut worker_args.rx_args_list[i] as *mut worker::rx::RxArgs as *mut c_void);
-    }
-
-    for i in 0..worker_args.pipeline_args_list.len() {
-        spawn(worker::pipeline::start_pipeline, &mut worker_args.pipeline_args_list[i] as *mut worker::pipeline::PipelineArgs as *mut c_void);
-    }
-
-    for i in 0..worker_args.tx_args_list.len() {
-        spawn(worker::tx::start_tx, &mut worker_args.tx_args_list[i] as *mut worker::tx::TxArgs as *mut c_void);
-    }
-}
 
 
 /**
@@ -106,7 +51,8 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let mut l1_cache_list = Array::<Array<CacheElement>>::new(interface_configs_len);
     let mut lbf_list = Array::<Array<u64>>::new(interface_configs_len);
     let mut l2_cache_list = Array::<Array<Array<CacheElement>>>::new(interface_configs_len);
-    let mut l3_cache = TupleSpace::new(100000);
+    // let mut l3_cache_list = Array::<TupleSpace>::new(interface_configs_len);
+    let mut l3_cache = TupleSpace::new(10000);
 
 
     // to main core ring 
@@ -159,6 +105,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
                 ring: cache_ring_list[j].clone(),
                 batch_count: cache_batch_count,
                 buf_len: 512,
+                hdr_max_len: 128,
                 l2_cache: l2_cache_list[i][j].clone(),
                 l3_cache: &l3_cache,
                 pipeline_ring_list: pipeline_ring_list.clone(),
@@ -193,19 +140,30 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     }
 
 
+    // start worker
     println!("start workers");
-    let mut worker_args = WorkerArgs {
-        rx_args_list,
-        pipeline_args_list,
-        tx_args_list,
-    };
-    start_workers(&mut worker_args);
+    for i in 0..rx_args_list.len() {
+        spawn(worker::rx::start_rx, &mut rx_args_list[i] as *mut worker::rx::RxArgs as *mut c_void);
+    }
+
+    for i in 0..cache_args_list.len() {
+        spawn(worker::cache::start_cache, &mut cache_args_list[i] as *mut worker::cache::CacheArgs as *mut c_void);
+    }
+
+    for i in 0..pipeline_args_list.len() {
+        spawn(worker::pipeline::start_pipeline, &mut pipeline_args_list[i] as *mut worker::pipeline::PipelineArgs as *mut c_void);
+    }
+
+    for i in 0..tx_args_list.len() {
+        spawn(worker::tx::start_tx, &mut tx_args_list[i] as *mut worker::tx::TxArgs as *mut c_void);
+    }
 
 
     // run cache crater thread
     let cache_creater_ring_for_main_core = cache_creater_ring.clone();
+    let table_list_clone = table_list.clone();
     thread::spawn(move || {
-        create_new_cache(cache_creater_ring_for_main_core);
+        cache_controller::create_new_cache(cache_creater_ring_for_main_core, table_list_clone);
     });
 
 
@@ -218,7 +176,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
                 // let table_list_clone = Arc::clone(&table_list);
                 let table_list_clone = table_list.clone();
                 thread::spawn(move || {
-                    cp_stream_handler(client, table_list_clone);
+                    cp_stream::stream_handler(client, table_list_clone);
                 });
             },
             _ => {},

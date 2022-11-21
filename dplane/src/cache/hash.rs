@@ -94,3 +94,8 @@ pub fn l2_hash_function_murmurhash3(pkt: *const u8, key_len: usize, seed: u32) -
     h1 << 16;
     h1 as u16
 }
+
+
+pub fn l3_hash_function_murmurhash3(pkt: *const u8, key_len: usize, seed: u32) -> u16 {
+    l2_hash_function_murmurhash3(pkt, key_len, seed)
+}

@@ -16,9 +16,9 @@ impl Parser {
         let runtime = runtime::new_runtime!(
             wasm,
             {
-                "get_pkt_len" => get_pkt_len,
-                "read_pkt" => read_pkt,
-                "extract_hdr" => extract_hdr,
+                "s4_sys_get_pkt_len" => get_pkt_len,
+                "s4_sys_read_pkt" => read_pkt,
+                "s4_sys_extract_hdr" => extract_hdr,
             }
         );
 

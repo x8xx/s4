@@ -11,15 +11,8 @@ pub struct PipelineArgs<'a> {
     pub table_list: &'a Array<RwLock<Table>>,
     pub pkt: *mut u8,
     pub parse_result: &'a ParseResult,
-    pub new_cache_data: &'a mut CacheData,
-    pub tx_conf: &'a mut TxConf,
-}
-
-pub struct PipelineCacheArgs<'a> {
-    pub table_list: &'a Array<RwLock<Table>>,
-    pub pkt: *mut u8,
-    pub parse_result: &'a ParseResult,
-    pub cache_data: &'a CacheData,
+    pub is_cache: bool,
+    pub cache_data: &'a mut CacheData,
     pub tx_conf: &'a mut TxConf,
 }
 
@@ -28,22 +21,19 @@ pub fn debug(id: i64) {
     println!("api debug {}", id);
 }
 
+
 pub fn search_table(pipeline_args_ptr: i64, table_id: i32) -> i64 {
     let pipeline_args = unsafe { &mut *(pipeline_args_ptr as *mut PipelineArgs) };
-    let PipelineArgs { table_list, pkt, parse_result, new_cache_data, tx_conf: _ } = pipeline_args;
+    let PipelineArgs { table_list, pkt, parse_result, is_cache, cache_data, tx_conf: _ } = pipeline_args;
 
-    let table = table_list[table_id as usize].read().unwrap();
-    let action_set = table.search(*pkt as *const u8, *parse_result);
-    new_cache_data[table_id as usize] = action_set.clone();
-    action_set as *const ActionSet as i64
-}
-
-
-pub fn get_action_set_from_cache(pipeline_args_ptr: i64, table_id: i32) -> i64 {
-    let pipeline_args = unsafe { &mut *(pipeline_args_ptr as *mut PipelineCacheArgs) };
-    let PipelineCacheArgs { table_list: _, pkt: _, parse_result: _, cache_data, tx_conf: _ } = pipeline_args;
-
-    &cache_data[table_id as usize] as *const ActionSet as i64
+    if *is_cache {
+        &cache_data[table_id as usize] as *const ActionSet as i64
+    } else {
+        let table = table_list[table_id as usize].read().unwrap();
+        let action_set = table.search(*pkt as *const u8, *parse_result);
+        cache_data[table_id as usize] = action_set.clone();
+        action_set as *const ActionSet as i64
+    }
 }
 
 

@@ -107,22 +107,21 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
     let mut next_pipeline_core = 0;
     let mut next_cache_core = 0;
-    let mut pktbuf_list = Array::<PktBuf>::new(rx_args.pktbuf_len);
+    let mut pktbuf_list = Array::<PktBuf>::new(rx_args.batch_count);
     loop {
         let pkt_count = rx_args.interface.rx(&mut pktbuf_list[0], rx_args.batch_count);
         for i in 0..pkt_count as usize {
             let rx_result = rx_result_ring_buf.malloc();
 
-            let pktbuf = &rx_result.pktbuf;
-            let (pkt, pkt_len) = pktbuf.get_raw_pkt();
+            rx_result.pktbuf = pktbuf_list.get(i).clone();
+            let (pkt, pkt_len) = rx_result.pktbuf.get_raw_pkt();
             if  !rx_args.parser.parse(pkt, pkt_len, &mut rx_result.parse_result) {
                 continue;
             }
 
             rx_result.raw_pkt = pkt;
             rx_result.pktbuf = pktbuf_list[i].clone();
-
-
+            
 
             // l1_cache
             let l1_hash = l1_hash_function_murmurhash3(pkt, rx_result.parse_result.hdr_size, rx_args.l1_hash_seed);
@@ -256,5 +255,20 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
 
 fn select_cache_core(core_flag: u64, core_len: usize, start_pos: u8) -> usize {
+    // for i in start_pos..core_len {
+    //     if ((core_flag & (1 << i)) >> i) == 1 {
+    //         hash_calc_result.is_lbf_hit = true;
+    //         rx_args.cache_ring_list[i].enqueue(rx_result);
+
+    //         next_cache_core += 1;
+    //         if next_cache_core == rx_args.cache_ring_list.len() {
+    //             next_cache_core = 0;
+    //         }
+
+    //         is_find = true;
+    //         break;
+    //     }
+
+    // }
     0
 }

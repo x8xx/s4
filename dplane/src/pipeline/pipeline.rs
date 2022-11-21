@@ -11,7 +11,6 @@ use crate::pipeline::tx_conf::TxConf;
 
 // runtime native api
 use crate::pipeline::runtime_native_api::PipelineArgs;
-use crate::pipeline::runtime_native_api::PipelineCacheArgs;
 use crate::pipeline::runtime_native_api::debug;
 use crate::pipeline::runtime_native_api::search_table;
 use crate::pipeline::runtime_native_api::read_pkt;
@@ -36,16 +35,16 @@ impl Pipeline {
         let runtime = runtime::new_runtime!(
             wasm,
             {
-                "debug" => debug,
-                "search_table" => search_table,
-                "read_pkt" => read_pkt,
-                "write_pkt" => write_pkt,
-                "get_metadata" => get_metadata,
-                "set_metadata" => set_metadata,
-                "get_action_id" => get_action_id,
-                "get_action_data" => get_action_data,
-                "to_controller" => to_controller,
-                "drop" => drop,
+                "s4_sys_debug" => debug,
+                "s4_sys_search_table" => search_table,
+                "s4_sys_read_pkt" => read_pkt,
+                "s4_sys_write_pkt" => write_pkt,
+                "s4_sys_get_metadata" => get_metadata,
+                "s4_sys_set_metadata" => set_metadata,
+                "s4_sys_get_action_id" => get_action_id,
+                "s4_sys_get_action_data" => get_action_data,
+                "s4_sys_to_controller" => to_controller,
+                "s4_sys_drop" => drop,
             }
         );
 
@@ -59,12 +58,13 @@ impl Pipeline {
     }
 
 
-    pub fn run_pipeline(&mut self, pkt: *mut u8, parse_result: &ParseResult, new_cache_data: &mut CacheData, tx_conf: &mut TxConf) {
+    pub fn run_pipeline(&mut self, pkt: *mut u8, parse_result: &ParseResult, cache_data: &mut CacheData, tx_conf: &mut TxConf) {
         let pipeline_args = PipelineArgs {
             table_list: &self.table_list,
             pkt,
             parse_result,
-            new_cache_data,
+            is_cache: false,
+            cache_data,
             tx_conf,
         };
         runtime::set_runtime_arg_i64!(self.runtime_args, 0, &pipeline_args as *const PipelineArgs as i64);
@@ -72,15 +72,16 @@ impl Pipeline {
     }
 
 
-    pub fn run_cache_pipeline(&mut self, pkt: *mut u8, parse_result: &ParseResult, cache_data: &CacheData, tx_conf: &mut TxConf) {
-        let pipeline_cache_args = PipelineCacheArgs {
+    pub fn run_cache_pipeline(&mut self, pkt: *mut u8, parse_result: &ParseResult, cache_data: &mut CacheData, tx_conf: &mut TxConf) {
+        let pipeline_cache_args = PipelineArgs {
             table_list: &self.table_list,
             pkt,
             parse_result,
+            is_cache: true,
             cache_data,
             tx_conf,
         };
-        runtime::set_runtime_arg_i64!(self.runtime_args, 0, &pipeline_cache_args as *const PipelineCacheArgs as i64);
-        runtime::call_runtime!(self.runtime, "run_cache_pipeline", self.runtime_args);
+        runtime::set_runtime_arg_i64!(self.runtime_args, 0, &pipeline_cache_args as *const PipelineArgs as i64);
+        runtime::call_runtime!(self.runtime, "run_pipeline", self.runtime_args);
     }
 }

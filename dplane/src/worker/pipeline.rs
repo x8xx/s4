@@ -53,7 +53,7 @@ pub struct NewCacheElement {
     pub l1_key_len: usize,
     pub cache_id: usize,
     pub cache_data: CacheData,
-    pub cache_calc_result: *const HashCalcResult
+    pub hash_calc_result: *const HashCalcResult
 }
 
 impl NewCacheElement {
@@ -103,7 +103,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 pktbuf: _,
                 raw_pkt: _,
                 parse_result: ref parse_result,
-                cache_data: ref cache_data,
+                cache_data: ref mut cache_data,
                 hash_calc_result: _
             } = rx_result_list.get(i);
 
@@ -140,7 +140,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 pktbuf: _,
                 raw_pkt,
                 parse_result: ref parse_result,
-                cache_data: _,
+                cache_data: ref mut cache_data,
                 hash_calc_result,
             } = unsafe { &mut **rx_result };
 
@@ -162,7 +162,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 }
                 new_cache_element.rx_id = *rx_id;
                 new_cache_element.cache_id = *cache_id;
-                new_cache_element.cache_calc_result = *hash_calc_result as *const HashCalcResult;
+                new_cache_element.hash_calc_result = *hash_calc_result as *const HashCalcResult;
 
                 // to cache_creater (main core)
                 pipeline_args.cache_creater_ring.enqueue(new_cache_element);

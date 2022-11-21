@@ -10,7 +10,8 @@ type MatchField = (HeaderID, FieldID);
 
 pub enum MatchKind {
     Exact,
-    Lpm
+    Lpm,
+    Range,
 }
 
 pub struct Table {
