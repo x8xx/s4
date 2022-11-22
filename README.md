@@ -1,4 +1,4 @@
-# S4 (Simple Software Switch Skeleton)
+# S4 (Super Speed Software Switch)
 - 実験
 - お遊び
 - おもちゃ

@@ -36,7 +36,7 @@ mod tests {
     use crate::core::memory::array::Array;
 
     #[test]
-    pub fn test_cmp_ptr_key() {
+    fn test_cmp_ptr_key() {
         let mut cache_element = CacheElement {
             key: Array::new(0).as_ptr(),
             key_len: 0,
