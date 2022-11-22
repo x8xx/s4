@@ -1,5 +1,6 @@
 use std::ffi::c_void;
 use std::mem::transmute;
+use std::sync::RwLock;
 use crate::core::memory::ring::Ring;
 use crate::core::memory::ring::RingBuf;
 use crate::core::memory::ring::init_ringbuf_element;
@@ -22,7 +23,7 @@ pub struct CacheArgs<'a> {
     pub hdr_max_len: usize,
 
     // cache
-    pub l2_cache: Array<CacheElement>,
+    pub l2_cache: Array<RwLock<CacheElement>>,
     pub l3_cache: &'a TupleSpace<'a>,
 
     // ring list
@@ -86,8 +87,9 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
 
             if hash_calc_result.is_lbf_hit {
                 // l2 cache
-                if cache_args.l2_cache[hash_calc_result.l2_hash as usize].cmp_ptr_key(hash_calc_result.l2_key.as_ptr(), hash_calc_result.l2_key_len as isize) {
-                    cache_result.cache_data = cache_args.l2_cache[hash_calc_result.l2_hash as usize].data.clone();
+                let cache_element = cache_args.l2_cache[hash_calc_result.l2_hash as usize].read().unwrap();
+                if cache_element.cmp_ptr_key(hash_calc_result.l2_key.as_ptr(), hash_calc_result.l2_key_len as isize) {
+                    cache_result.cache_data = cache_element.data.clone();
                     cache_result.is_cache_hit = true;
 
                     cache_args.pipeline_ring_list[next_pipeline_core].enqueue(cache_result);

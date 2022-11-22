@@ -48,9 +48,9 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let interface_configs_len = switch_config.interface_configs.len();
 
     // cache 
-    let mut l1_cache_list = Array::<Array<CacheElement>>::new(interface_configs_len);
+    let mut l1_cache_list = Array::<Array<RwLock<CacheElement>>>::new(interface_configs_len);
     let mut lbf_list = Array::<Array<u64>>::new(interface_configs_len);
-    let mut l2_cache_list = Array::<Array<Array<CacheElement>>>::new(interface_configs_len);
+    let mut l2_cache_list = Array::<Array<Array<RwLock<CacheElement>>>>::new(interface_configs_len);
     // let mut l3_cache_list = Array::<TupleSpace>::new(interface_configs_len);
     let mut l3_cache = TupleSpace::new(10000);
 

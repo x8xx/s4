@@ -1,5 +1,6 @@
 use std::ffi::c_void;
 use std::mem::transmute;
+use std::sync::RwLock;
 use crate::core::memory::ring::Ring;
 use crate::core::memory::ring::RingBuf;
 use crate::core::memory::ring::{init_ringbuf_element, malloc_ringbuf_all_element, free_ringbuf_all_element};
@@ -27,7 +28,7 @@ pub struct RxArgs {
     // cache
     pub l1_hash_seed: u32,
     pub l2_hash_seed: u32,
-    pub l1_cache: Array<CacheElement>,
+    pub l1_cache: Array<RwLock<CacheElement>>,
     pub lbf: Array<u64>,
     pub l2_key_max_len: u8,
 
@@ -125,8 +126,9 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
             // l1_cache
             let l1_hash = l1_hash_function_murmurhash3(pkt, rx_result.parse_result.hdr_size, rx_args.l1_hash_seed);
-            if rx_args.l1_cache[l1_hash as usize].cmp_ptr_key(pkt, rx_result.parse_result.hdr_size as isize) {
-                rx_result.cache_data= rx_args.l1_cache[l1_hash as usize].data.clone();
+            let cache_element = rx_args.l1_cache[l1_hash as usize].read().unwrap();
+            if cache_element.cmp_ptr_key(pkt, rx_result.parse_result.hdr_size as isize) {
+                rx_result.cache_data= cache_element.data.clone();
                 rx_args.pipeline_ring_list[next_pipeline_core].enqueue(rx_result);
 
                 next_pipeline_core += 1;
