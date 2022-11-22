@@ -179,11 +179,11 @@ impl Field {
         // end
         let pkt_end_value = if (value.len() - 1) == (self.end_byte_pos - self.start_byte_pos) {
             unsafe {
-                *(pkt.offset((self.end_byte_pos + hdr_offset as usize) as isize)) & self.end_bit_mask
+                *(pkt.offset((self.end_byte_pos + hdr_offset as usize) as isize)) & end_bit_mask
             }
         } else {
             unsafe {
-                *(pkt.offset((self.start_byte_pos + (value.len() - 1) + hdr_offset as usize) as isize))
+                *(pkt.offset((self.start_byte_pos + (value.len() - 1) + hdr_offset as usize) as isize)) & end_bit_mask
             }
         };
 
@@ -344,6 +344,37 @@ mod tests {
         value[1] = 20;
         value[2] = 128;
         assert!(field.cmp_pkt(pkt.as_ptr(), 0, &value, 0x80));
+        value.free();
+
+
+        // LPM
+        field = Field {
+            start_byte_pos: 0,
+            start_bit_mask: 0xff,
+            end_byte_pos: 3,
+            end_bit_mask: 0xff,
+        }; 
+        value = Array::<u8>::new(3);
+        value[0] = 10;
+        value[1] = 20;
+        value[2] = 129;
+        assert!(field.cmp_pkt(pkt.as_ptr(), 0, &value, 0xff));
+        value.free();
+
+
+        // LPM
+        field = Field {
+            start_byte_pos: 0,
+            start_bit_mask: 0xff,
+            end_byte_pos: 3,
+            end_bit_mask: 0xff,
+        }; 
+        value = Array::<u8>::new(4);
+        value[0] = 10;
+        value[1] = 20;
+        value[2] = 129;
+        value[3] = 32;
+        assert!(field.cmp_pkt(pkt.as_ptr(), 0, &value, 0xE0));
         value.free();
 
 
