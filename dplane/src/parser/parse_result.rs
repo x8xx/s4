@@ -8,8 +8,6 @@ pub struct ParseResult {
 
 pub struct Metadata {
     pub port: u8,
-    pub is_drop: bool,
-    pub is_flooding: bool,
 }
 
 pub struct Header {

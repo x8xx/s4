@@ -127,8 +127,8 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             let l1_hash = l1_hash_function_murmurhash3(pkt, rx_result.parse_result.hdr_size, rx_args.l1_hash_seed);
             if rx_args.l1_cache[l1_hash as usize].cmp_ptr_key(pkt, rx_result.parse_result.hdr_size as isize) {
                 rx_result.cache_data= rx_args.l1_cache[l1_hash as usize].data.clone();
-
                 rx_args.pipeline_ring_list[next_pipeline_core].enqueue(rx_result);
+
                 next_pipeline_core += 1;
                 if next_pipeline_core == rx_args.pipeline_ring_list.len() {
                     next_pipeline_core = 0;
@@ -136,9 +136,10 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 continue;
             }
 
-            let hash_calc_result = hash_calc_result_ring_buf.malloc();
-            hash_calc_result.l1_hash = l1_hash;
 
+            let hash_calc_result = hash_calc_result_ring_buf.malloc();
+            hash_calc_result.is_lbf_hit = false;
+            hash_calc_result.l1_hash = l1_hash;
 
 
             // lbf
@@ -187,62 +188,11 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             rx_result.hash_calc_result = hash_calc_result as *mut HashCalcResult;
             rx_args.cache_ring_list[cache_core].enqueue(rx_result);
 
+
             next_cache_core += 1;
             if next_cache_core as usize == rx_args.cache_ring_list.len() {
                 next_cache_core = 0;
             }
-
-
-//             rx_result.hash_calc_result.is_lbf_hit = false;
-//             next_cache_core += 1;
-
-//             let mut is_find = false;
-//             for i in next_cache_core..rx_args.cache_ring_list.len() {
-//                 if ((core_flag & (1 << i)) >> i) == 1 {
-//                     hash_calc_result.is_lbf_hit = true;
-//                     rx_args.cache_ring_list[i].enqueue(rx_result);
-
-//                     next_cache_core += 1;
-//                     if next_cache_core == rx_args.cache_ring_list.len() {
-//                         next_cache_core = 0;
-//                     }
-
-//                     is_find = true;
-//                     break;
-//                 }
-
-//             }
-
-//             if is_find {
-//                 continue;
-//             }
-
-//             for i in 0..next_cache_core {
-//                 if ((core_flag & (1 << i)) >> i) == 1 {
-//                     rx_result.hash_calc_result.is_lbf_hit = true;
-//                     rx_args.cache_ring_list[i].enqueue(rx_result);
-
-//                     next_cache_core += 1;
-//                     if next_cache_core == rx_args.cache_ring_list.len() {
-//                         next_cache_core = 0;
-//                     }
-
-//                     is_find = true;
-//                     break;
-//                 }
-//             }
-
-//             if is_find {
-//                 continue;
-//             }
-
-
-//             rx_result.hash_calc_result.is_lbf_hit = false;
-//             rx_args.cache_ring_list[next_cache_core].enqueue(rx_result);
-//             next_cache_core += 1;
-//             if next_cache_core == rx_args.cache_ring_list.len() {
-//                 next_cache_core = 0;
-//             }
 
 
             if false {
@@ -254,21 +204,16 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 }
 
 
-fn select_cache_core(core_flag: u64, core_len: usize, start_pos: u8) -> usize {
-    // for i in start_pos..core_len {
-    //     if ((core_flag & (1 << i)) >> i) == 1 {
-    //         hash_calc_result.is_lbf_hit = true;
-    //         rx_args.cache_ring_list[i].enqueue(rx_result);
-
-    //         next_cache_core += 1;
-    //         if next_cache_core == rx_args.cache_ring_list.len() {
-    //             next_cache_core = 0;
-    //         }
-
-    //         is_find = true;
-    //         break;
-    //     }
-
-    // }
-    0
+fn select_cache_core(core_flag: u64, core_len: usize, start_pos: usize) -> usize {
+    for i in start_pos..core_len {
+        if ((core_flag & (1 << i)) >> i) == 1 {
+            return i;
+        }
+    }
+    for i in 0..start_pos {
+        if ((core_flag & (1 << i)) >> i) == 1 {
+            return i;
+        }
+    }
+    return core_len;
 }

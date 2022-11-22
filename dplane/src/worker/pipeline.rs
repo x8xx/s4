@@ -109,7 +109,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
 
             pipeline_args.pipeline.run_cache_pipeline(rx_result_list.get(i).raw_pkt, parse_result, cache_data, &mut pipeline_result.tx_conf);
 
-            if parse_result.metadata.is_drop {
+            if pipeline_result.tx_conf.is_drop {
                 rx_result_list.get(i).free();
                 continue;
             }
