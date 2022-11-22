@@ -122,10 +122,10 @@ impl Field {
     pub fn copy_ptr_value(&self, base_offset: isize, src: *mut u8, dst: *mut u8) -> isize {
         unsafe {
             if self.start_byte_pos == self.end_byte_pos {
-                *dst = *src.offset(base_offset + self.start_byte_pos as isize) ^ self.start_bit_mask;
+                *dst = *src.offset(base_offset + self.start_byte_pos as isize) & self.start_bit_mask;
                 return 1;
             }
-            *dst = *src.offset(base_offset + self.start_byte_pos as isize) ^ self.start_bit_mask;
+            *dst = *src.offset(base_offset + self.start_byte_pos as isize) & self.start_bit_mask;
 
             let mut dst_offset = 1;
             for i in (base_offset + self.start_byte_pos as isize + 1)..(base_offset+ self.end_byte_pos as isize) {
@@ -134,7 +134,8 @@ impl Field {
             }
 
 
-            *dst.offset(dst_offset) = *src.offset(base_offset + self.end_byte_pos as isize) ^ self.end_bit_mask;
+            *dst.offset(dst_offset) = *src.offset(base_offset + self.end_byte_pos as isize) & self.end_bit_mask;
+            dst_offset += 1;
             dst_offset
         }
     }
@@ -164,26 +165,32 @@ impl Field {
 
 
         // middle
-        for i in (self.start_byte_pos + 1)..self.end_byte_pos {
+        for i in 1..(value.len()-1) {
             let pkt_value = unsafe {
-                *(pkt.offset((i + hdr_offset as usize) as isize))
+                *(pkt.offset((self.start_byte_pos + i + hdr_offset as usize) as isize))
             };
 
-            if pkt_value != value[i - self.start_byte_pos] {
+            if pkt_value != value[i] {
                 return false;
             }
-
         }
 
 
         // end
-        let pkt_end_value = unsafe {
-            *(pkt.offset((self.end_byte_pos + hdr_offset as usize) as isize)) & self.end_bit_mask
+        let pkt_end_value = if (value.len() - 1) == (self.end_byte_pos - self.start_byte_pos) {
+            unsafe {
+                *(pkt.offset((self.end_byte_pos + hdr_offset as usize) as isize)) & self.end_bit_mask
+            }
+        } else {
+            unsafe {
+                *(pkt.offset((self.start_byte_pos + (value.len() - 1) + hdr_offset as usize) as isize))
+            }
         };
 
         if pkt_end_value != value[value.len() - 1] & end_bit_mask {
             return false;
         }
+
         true
     }
 }
@@ -192,9 +199,10 @@ impl Field {
 #[cfg(test)]
 mod tests {
     use super::Field;
+    use crate::core::memory::array::Array;
 
     #[test]
-    pub fn test_field_new() {
+    fn test_field_new() {
         let mut field = Field {
             start_byte_pos: 0,
             start_bit_mask: 0,
@@ -255,5 +263,114 @@ mod tests {
         assert_eq!(field.start_bit_mask, 0xff);
         assert_eq!(field.end_byte_pos, 16);
         assert_eq!(field.end_bit_mask, 0xff);
+    }
+
+
+    #[test]
+    fn test_copy_ptr_value() {
+        let mut src = Array::<u8>::new(10);
+        let mut dst = Array::<u8>::new(10);
+
+        src[0] = 10;
+        src[1] = 20;
+        src[2] = 30;
+        let mut field = Field {
+            start_byte_pos: 0,
+            start_bit_mask: 0xff,
+            end_byte_pos: 2,
+            end_bit_mask: 0xff,
+        }; 
+        let mut next = field.copy_ptr_value(0, src.as_ptr(), dst.as_ptr());
+        assert_eq!(src[0], dst[0]);
+        assert_eq!(src[1], dst[1]);
+        assert_eq!(src[2], dst[2]);
+        assert_eq!(next, 3);
+
+
+        src[3] = 40;
+        src[4] = 50;
+        src[5] = 60;
+        field = Field {
+            start_byte_pos: 0,
+            start_bit_mask: 0xff,
+            end_byte_pos: 2,
+            end_bit_mask: 0xff,
+        }; 
+        next = field.copy_ptr_value(3, src.as_ptr(), unsafe { dst.as_ptr().offset(3) });
+        assert_eq!(src[3], dst[3]);
+        assert_eq!(src[4], dst[4]);
+        assert_eq!(src[5], dst[5]);
+        assert_eq!(next, 3);
+
+
+        src[6] = 70;
+        src[7] = 129;
+        field = Field {
+            start_byte_pos: 6,
+            start_bit_mask: 0xff,
+            end_byte_pos: 7,
+            end_bit_mask: 0x80,
+        }; 
+        next = field.copy_ptr_value(0, src.as_ptr(), unsafe { dst.as_ptr().offset(6) });
+        assert_eq!(src[6], dst[6]);
+        assert_eq!(128, dst[7]);
+        assert_eq!(next, 2);
+    }
+
+
+    #[test]
+    fn test_cmp_pkt() {
+        let mut pkt = Array::<u8>::new(10);
+        pkt[0] = 10;
+        pkt[1] = 20;
+        pkt[2] = 129;
+        pkt[3] = 40;
+        pkt[4] = 50;
+        pkt[5] = 60;
+        pkt[6] = 70;
+        pkt[7] = 80;
+        pkt[8] = 64;
+        pkt[9] = 100;
+
+
+        let mut field = Field {
+            start_byte_pos: 0,
+            start_bit_mask: 0xff,
+            end_byte_pos: 2,
+            end_bit_mask: 0x80,
+        }; 
+        let mut value = Array::<u8>::new(3);
+        value[0] = 10;
+        value[1] = 20;
+        value[2] = 128;
+        assert!(field.cmp_pkt(pkt.as_ptr(), 0, &value, 0x80));
+        value.free();
+
+
+        field = Field {
+            start_byte_pos: 0,
+            start_bit_mask: 0xff,
+            end_byte_pos: 3,
+            end_bit_mask: 0xff,
+        }; 
+        value = Array::<u8>::new(4);
+        value[0] = 40;
+        value[1] = 50;
+        value[2] = 60;
+        value[3] = 70;
+        assert!(field.cmp_pkt(pkt.as_ptr(), 3, &value, 0xff));
+        value.free();
+
+
+        field = Field {
+            start_byte_pos: 0,
+            start_bit_mask: 0xC0,
+            end_byte_pos: 0,
+            end_bit_mask: 0xC0,
+        }; 
+        value = Array::<u8>::new(1);
+        value[0] = 64;
+        assert!(field.cmp_pkt(pkt.as_ptr(), 8, &value, 0xC0));
+        value.free();
     }
 }
