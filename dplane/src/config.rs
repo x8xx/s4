@@ -7,15 +7,22 @@ use serde::Deserialize;
 
 pub struct SwitchConfig {
     pub dataplane: DpConfig,
+
     pub parser_wasm: Vec<u8>,
     pub pipeline_wasm: Vec<u8>,
+
     pub listen_address: String,
+
     pub cache_core_num: u8,
     pub pipeline_core_num: u8,
+
     pub l1_cache_size: usize,
     pub l2_cache_size: usize,
     pub l3_cache_tuple_size: usize,
+
     pub interface_configs: Vec<InterfaceConfig>,
+
+    pub initial_table_data: Vec<u8>,
 }
 
 pub struct InterfaceConfig {
@@ -101,6 +108,16 @@ pub fn parse_switch_args(args: &[String]) -> SwitchConfig {
         pipeline_wasm
     };
 
+    // initial table data
+    let initial_table_data_path = get_string_from_yaml_value(yaml_config_general, "initial_table_data");
+    let initial_table_data = {
+        let mut f = fs::File::open(&initial_table_data_path).unwrap();
+        let metadata = std::fs::metadata(&initial_table_data_path).unwrap();
+        let mut initial_table_data  = vec![0;metadata.len() as usize];
+        f.read(&mut initial_table_data).unwrap();
+        initial_table_data
+    };
+
 
     let listen_address = get_string_from_yaml_value(yaml_config_general, "listen_address");
     let cache_core_num = yaml_config_general["cache_core_num"].clone().as_i64().unwrap() as u8;
@@ -129,6 +146,7 @@ pub fn parse_switch_args(args: &[String]) -> SwitchConfig {
         l2_cache_size,
         l3_cache_tuple_size,
         interface_configs,
+        initial_table_data,
     }
 }
 

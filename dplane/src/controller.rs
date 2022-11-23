@@ -46,6 +46,19 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     }
 
     // initial flowentry
+    // entry_count(4byte) | (table_id(1byte) | entry_buf_size(2byte) | entry)*
+    let initial_table_data = &switch_config.initial_table_data;
+    if initial_table_data.len() != 0 {
+        let entry_count: u32 = ((initial_table_data[3] << 24) + (initial_table_data[2] << 16) + (initial_table_data[1] << 8) + initial_table_data[0]) as u32;
+        let mut pos = 4;
+        for _ in 0..entry_count as usize {
+            let table_id = initial_table_data[pos];
+            pos += 1;
+            let entry_buf_size = (initial_table_data[pos + 1] << 8) + initial_table_data[pos];
+            pos += 2;
+            table_controller::add_flow_entry(&mut table_list[table_id as usize], &initial_table_data[pos..pos+entry_buf_size as usize]);
+        }
+    }
 
 
     let interface_configs_len = switch_config.interface_configs.len();
