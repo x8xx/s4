@@ -4,6 +4,7 @@ mod controller;
 mod parser;
 mod cache;
 mod pipeline;
+mod deparser;
 mod worker;
 
 use std::env;

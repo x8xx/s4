@@ -4,9 +4,6 @@ use crate::core::memory::array::Array;
 use crate::core::memory::ring::Ring;
 use crate::core::memory::ring::RingBuf;
 use crate::core::memory::ring::init_ringbuf_element;
-// use crate::core::network::pktbuf::PktBuf;
-// use crate::parser::parse_result;
-// use crate::parser::parse_result::ParseResult;
 use crate::cache::cache::CacheData;
 use crate::pipeline::pipeline::Pipeline;
 use crate::pipeline::tx_conf::TxConf;
@@ -22,7 +19,7 @@ pub struct PipelineArgs {
 
     pub batch_count: usize,
     pub table_list_len: usize,
-    pub hdr_max_len: usize,
+    pub header_max_size: usize,
 
     pub tx_ring_list: Array<Ring>,
     pub cache_creater_ring: Ring,
@@ -53,7 +50,7 @@ pub struct NewCacheElement {
     pub l1_key_len: usize,
     pub cache_id: usize,
     pub cache_data: CacheData,
-    pub hash_calc_result: *const HashCalcResult
+    pub hash_calc_result: *mut HashCalcResult
 }
 
 impl NewCacheElement {
@@ -81,7 +78,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
     let mut new_cache_element_ringbuf = RingBuf::<NewCacheElement>::new(1024);
     init_ringbuf_element!(new_cache_element_ringbuf, NewCacheElement, {
         owner_ring => &mut new_cache_element_ringbuf as *mut RingBuf<NewCacheElement>,
-        l1_key => Array::new(pipeline_args.hdr_max_len),
+        l1_key => Array::new(pipeline_args.header_max_size),
         cache_data => Array::new(pipeline_args.table_list_len),
     });
 
@@ -162,7 +159,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 }
                 new_cache_element.rx_id = *rx_id;
                 new_cache_element.cache_id = *cache_id;
-                new_cache_element.hash_calc_result = *hash_calc_result as *const HashCalcResult;
+                new_cache_element.hash_calc_result = *hash_calc_result as *const HashCalcResult as *mut HashCalcResult;
 
                 // to cache_creater (main core)
                 pipeline_args.cache_creater_ring.enqueue(new_cache_element);

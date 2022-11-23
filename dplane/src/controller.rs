@@ -30,6 +30,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
 
     // header_list
     let hdr_confs = &dp_config.headers;
+    let mut header_max_size = dp_config.header_max_size;
     let mut header_list: Array<header::Header> = Array::<header::Header>::new(hdr_confs.len());
     for (i, hdr_conf) in hdr_confs.iter().enumerate() {
         header_list.init(i, header::Header::new(&hdr_conf.fields, &hdr_conf.used_fields, &hdr_conf.parse_fields));
@@ -38,7 +39,6 @@ pub fn start_controller(switch_config: &SwitchConfig) {
 
     //table_list
     let table_confs = &dp_config.tables;
-    // let table_list = Arc::new(Array::<RwLock<Table>>::new(table_confs.len()));
     let mut table_list = Array::<RwLock<Table>>::new(table_confs.len());
     for (i, table_conf) in table_confs.iter().enumerate() {
         table_list.init(i, RwLock::new(Table::new(table_conf, header_list.clone())));
@@ -75,6 +75,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     // pipeline_args_list
     let mut pipeline_ring_list = Array::<ring::Ring>::new(switch_config.pipeline_core_num as usize);
     let mut pipeline_args_list = Array::<worker::pipeline::PipelineArgs>::new(switch_config.pipeline_core_num as usize);
+
     for i in 0..pipeline_args_list.len() {
         pipeline_ring_list.init(i, ring::Ring::new(1024));
         pipeline_args_list.init(i, worker::pipeline::PipelineArgs {
@@ -82,7 +83,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             ring: pipeline_ring_list[i].clone(),
             batch_count: pipeline_batch_count,
             table_list_len: table_list.len(),
-            hdr_max_len: 128,
+            header_max_size,
             tx_ring_list: tx_ring_list.clone(),
             cache_creater_ring: cache_creater_ring.clone(),
         });
@@ -94,26 +95,47 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let mut rx_args_list = Array::<worker::rx::RxArgs>::new(switch_config.interface_configs.len());
     let mut cache_args_list = Array::<worker::cache::CacheArgs>::new(switch_config.cache_core_num as usize);
     let mut tx_args_list = Array::<worker::tx::TxArgs>::new(switch_config.interface_configs.len());
+
     for (i, interface_conf) in switch_config.interface_configs.iter().enumerate() {
         let mut cache_ring_list = Array::<ring::Ring>::new(switch_config.cache_core_num as usize);
         l2_cache_list.init(i, Array::new(interface_conf.cache_core_num as usize));
         for j in 0..interface_conf.cache_core_num as usize {
+            println!("init: cache core rx-{}, cache-{}", i, j);
             cache_ring_list.init(j, ring::Ring::new(1024));
             l2_cache_list[i].init(j, Array::new(switch_config.l2_cache_size));
+            {
+                for k in 0..l2_cache_list[i][j].len() {
+                    l2_cache_list[i][j].init(k, RwLock::new(CacheElement {
+                        key: Array::new(header_max_size),
+                        key_len: 0,
+                        data: Array::new(table_list.len()),
+                    }));
+                }
+            }
             cache_args_list.init(j, worker::cache::CacheArgs {
                 id: j,
                 ring: cache_ring_list[j].clone(),
                 batch_count: cache_batch_count,
                 buf_len: 512,
-                hdr_max_len: 128,
+                header_max_size,
                 l2_cache: l2_cache_list[i][j].clone(),
                 l3_cache: &l3_cache,
                 pipeline_ring_list: pipeline_ring_list.clone(),
             });
         }
 
+        println!("init: rx core rx-{}", i);
         let interface = Interface::new(&interface_conf.if_name);
         l1_cache_list.init(i, Array::new(switch_config.l1_cache_size));
+        {
+            for j in 0..l1_cache_list[i].len() {
+                l1_cache_list[i].init(j, RwLock::new(CacheElement {
+                    key: Array::new(header_max_size),
+                    key_len: 0,
+                    data: Array::new(table_list.len()),
+                }));
+            }
+        }
         lbf_list.init(i, Array::new(switch_config.l2_cache_size));
         rx_args_list.init(i, worker::rx::RxArgs {
             id: i,
@@ -132,6 +154,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         });
 
 
+        println!("init: tx core tx-{}", i);
         tx_args_list.init(i, worker::tx::TxArgs {
             interface: interface.clone(),
             ring: tx_ring_list[i].clone(),
@@ -163,7 +186,11 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let cache_creater_ring_for_main_core = cache_creater_ring.clone();
     let table_list_clone = table_list.clone();
     thread::spawn(move || {
-        cache_controller::create_new_cache(cache_creater_ring_for_main_core, table_list_clone);
+        cache_controller::create_new_cache(cache_creater_ring_for_main_core,
+                                           table_list_clone,
+                                           l1_cache_list.clone(),
+                                           lbf_list.clone(),
+                                           l2_cache_list.clone());
     });
 
 

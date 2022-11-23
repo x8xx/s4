@@ -2,6 +2,7 @@ use crate::config::DpConfigTable;
 use crate::core::memory::array::Array;
 use crate::parser::header::Header;
 use crate::parser::parse_result::ParseResult;
+use crate::cache::cache::CacheRelation;
 
 
 type HeaderID = usize;
@@ -16,7 +17,8 @@ pub enum MatchKind {
 pub struct Table {
     entries: Array<FlowEntry>,
     keys: Array<(MatchField, MatchKind)>,
-    default_action: ActionSet,
+    // default_action: ActionSet,
+    default_entry: FlowEntry,
     len: usize,
     header_list: Array<Header>,
 }
@@ -25,6 +27,7 @@ pub struct FlowEntry {
     pub values: Array<MatchFieldValue>,
     pub priority: u8,
     pub action: ActionSet,
+    // pub cache_relation: Option<CacheRelation>,
 }
 
 pub struct MatchFieldValue {
@@ -43,6 +46,17 @@ pub struct ActionSet {
 impl Table {
     pub fn new(table_conf: &DpConfigTable, header_list: Array<Header>) -> Self {
         let mut keys = Array::<(MatchField, MatchKind)>::new(table_conf.keys.len());
+
+        let mut default_entry = FlowEntry {
+            values: Array::new(table_conf.keys.len()),
+            priority: 0,
+            action: ActionSet {
+                action_id: table_conf.default_action_id as u8,
+                action_data: Array::new(0),
+            },
+        };
+
+
         for (i, key) in table_conf.keys.iter().enumerate() {
             let match_field = (key.header_id as usize, key.field_id as usize);
             let match_kind = if key.match_kind == "lpm" {
@@ -51,31 +65,33 @@ impl Table {
                 MatchKind::Exact
             };
             keys.init(i, (match_field, match_kind));
+            default_entry.values.init(i, MatchFieldValue {
+                value: None,
+                prefix_mask: 0,
+            });
         } 
 
-
-        let default_action = ActionSet {
-            action_id: table_conf.default_action_id as u8,
-            action_data: Array::new(0),
-        };
-        
 
         Table {
             entries: Array::new(table_conf.max_size as usize),
             keys,
-            default_action,
+            default_entry,
             len: 0,
             header_list,
         }
     }
 
-    pub fn search(&self, pkt: *const u8, parse_result: &ParseResult) -> &ActionSet {
+
+    pub fn search(&self, pkt: *const u8, parse_result: &ParseResult) -> &FlowEntry {
         fn lpm_check(new_entry: &MatchFieldValue, old_entry: &MatchFieldValue) -> bool {
             // new: any, old: value => false
             if new_entry.value.is_none() && !old_entry.value.is_none() {
                 return false;
             // new: value, old: any => true
             } else if !new_entry.value.is_none() && old_entry.value.is_none() {
+                return true;
+            // new: any, old: any => true
+            } else if new_entry.value.is_none() == old_entry.value.is_none() {
                 return true;
             }
 
@@ -102,8 +118,7 @@ impl Table {
 
 
         // search result entry
-        let mut result_entry: Option<&FlowEntry> = None;
-
+        let mut result_entry = &self.default_entry;
 
         // search all entry
         for i in 0..self.len {
@@ -120,18 +135,12 @@ impl Table {
                     // any
                     None => {
                         if let MatchKind::Lpm = match_kind {
-                            match &result_entry {
-                                Some(entry) => {
-                                    if !lpm_check(&self.entries[i].values[j], &entry.values[j]) {
-                                        break;
-                                    }
-                                    if !entry.values[j].value.is_none() {
-                                        break;
-                                    }
-                                }
-                                _ => {},
-
+                            if !lpm_check(&self.entries[i].values[j], &result_entry.values[j]) {
+                                break;
                             }
+                            // if !result_entry.values[j].value.is_none() {
+                            //     break;
+                            // }
                         }
                         success_match_count += 1;
                         continue;
@@ -153,14 +162,8 @@ impl Table {
 
                 // lpm check
                 if let MatchKind::Lpm = match_kind {
-                    match &result_entry {
-                        Some(entry) => {
-                            if !lpm_check(&self.entries[i].values[j], &entry.values[j]) {
-                                break;
-                            }
-                        }
-                        _ => {},
-
+                    if !lpm_check(&self.entries[i].values[j], &result_entry.values[j]) {
+                        break;
                     }
                 }
 
@@ -173,29 +176,15 @@ impl Table {
 
 
             // priority check
-            match result_entry {
-                Some(entry) => {
-                    if entry.priority < self.entries[i].priority {
-                        result_entry = Some(&self.entries[i]);
-                    }
-                },
-                None => {
-                    result_entry = Some(&self.entries[i]);
-                }
+            if result_entry.priority <= self.entries[i].priority {
+                result_entry = &self.entries[i];
             }
         }
 
-
-        // return action set
-        match result_entry {
-            Some(entry) => {
-                &entry.action
-            },
-            None => {
-                &self.default_action
-            }
-        }
+        // return flow_entry
+        &result_entry
     }
+
 
     pub fn insert(&mut self, entry: FlowEntry) {
         self.entries[self.len] = entry;
@@ -242,11 +231,13 @@ mod tests {
     fn get_dp_config_table_key_1() -> Vec<DpConfigTableKey> {
         let mut keys = Vec::new();
 
+        // dst mac address
         keys.push(DpConfigTableKey {
             match_kind: "exact".to_string(),
             header_id: 0,
             field_id: 0,
         });
+        // dst IPv4 address
         keys.push(DpConfigTableKey {
             match_kind: "lpm".to_string(),
             header_id: 1,
@@ -361,7 +352,7 @@ mod tests {
         });
         parse_result.header_list.init(1, parse_result::Header {
             is_valid: true,
-            offset: 12,
+            offset: 14,
         });
 
 
@@ -373,19 +364,23 @@ mod tests {
         pkt[3] = 0x04;
         pkt[4] = 0x05;
         pkt[5] = 0x06;
-        pkt[28] = 192;
-        pkt[29] = 168;
-        pkt[30] = 0;
-        pkt[31] = 24;
-        let action_set = table.search(pkt.as_ptr(), &parse_result);
-        assert_eq!(action_set.action_id, 1);
+        pkt[30] = 192;
+        pkt[31] = 168;
+        pkt[32] = 0;
+        pkt[33] = 24;
+        let mut flow_entry = table.search(pkt.as_ptr(), &parse_result);
+        assert_eq!(flow_entry.action.action_id, 1);
 
-        pkt[28] = 172;
-        pkt[29] = 16;
-        pkt[30] = 0;
-        pkt[31] = 24;
-        let action_set = table.search(pkt.as_ptr(), &parse_result);
-        assert_eq!(action_set.action_id, 2);
+        pkt[30] = 172;
+        pkt[31] = 16;
+        pkt[32] = 0;
+        pkt[33] = 24;
+        flow_entry = table.search(pkt.as_ptr(), &parse_result);
+        assert_eq!(flow_entry.action.action_id, 2);
+
+        pkt[5] = 0x07;
+        flow_entry = table.search(pkt.as_ptr(), &parse_result);
+        assert_eq!(flow_entry.action.action_id, 0);
     }
 
 }

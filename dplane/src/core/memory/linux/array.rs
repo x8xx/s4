@@ -76,6 +76,15 @@ impl<T> Array<T> {
 }
 
 
+impl<U: Copy> Array<U> {
+    pub fn deepcopy(&self, dst: &mut Array<U>) {
+        for i in 0..self.len() {
+            dst[i] = self[i];
+        }
+    }
+}
+
+
 impl<T> Index<usize> for Array<T> {
     type Output = T;
 

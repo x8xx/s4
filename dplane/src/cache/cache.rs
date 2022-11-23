@@ -1,11 +1,14 @@
 use crate::core::memory::array::Array;
-use crate::pipeline::table::ActionSet;
+// use crate::pipeline::table::ActionSet;
+use crate::pipeline::table::FlowEntry;
 
 
-pub type CacheData = Array<ActionSet>;
+// pub type CacheData = Array<ActionSet>;
+pub type CacheData = Array<*const FlowEntry>;
 
 pub struct CacheElement {
-    pub key: *const u8,
+    // pub key: *const u8,
+    pub key: Array<u8>,
     pub key_len: isize,
     pub data: CacheData,
 }
@@ -19,7 +22,7 @@ impl CacheElement {
 
         for i in 0..key_len {
             unsafe {
-                if *self.key.offset(i) != *ptr_key.offset(i) {
+                if *self.key.as_ptr().offset(i) != *ptr_key.offset(i) {
                     return false;
                 }
             }
@@ -27,6 +30,12 @@ impl CacheElement {
 
         true
     }
+}
+
+
+pub struct CacheRelation {
+    pub l1_cache: Array<*mut CacheElement>,
+    pub l2_cache: Array<*mut CacheElement>,
 }
 
 
@@ -38,7 +47,7 @@ mod tests {
     #[test]
     fn test_cmp_ptr_key() {
         let mut cache_element = CacheElement {
-            key: Array::new(0).as_ptr(),
+            key: Array::new(0),
             key_len: 0,
             data: Array::new(3),
         };
@@ -49,7 +58,7 @@ mod tests {
         key[2] = 30;
         key[3] = 40;
         key[4] = 50;
-        cache_element.key = key.as_ptr();
+        cache_element.key = key;
         cache_element.key_len = 5;
 
         let mut target_key = Array::<u8>::new(10);

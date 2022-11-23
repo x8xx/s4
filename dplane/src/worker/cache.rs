@@ -20,7 +20,7 @@ pub struct CacheArgs<'a> {
 
     pub batch_count: usize,
     pub buf_len: usize,
-    pub hdr_max_len: usize,
+    pub header_max_size: usize,
 
     // cache
     pub l2_cache: Array<RwLock<CacheElement>>,
@@ -72,7 +72,7 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
     let rx_result_list = Array::<&mut RxResult>::new(cache_args.batch_count);
     let mut next_pipeline_core = 0;
     let mut tss_key_store = KeyStore {
-        key: Array::new(cache_args.hdr_max_len),
+        key: Array::new(cache_args.header_max_size),
         key_len: 0,
     };
     loop {

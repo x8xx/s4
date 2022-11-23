@@ -31,6 +31,7 @@ pub struct InterfaceConfig {
 #[derive(Deserialize)]
 pub struct DpConfig {
     pub headers: Vec<DpConfigHeader>,
+    pub header_max_size: usize,
     pub tables: Vec<DpConfigTable>,
 }
 

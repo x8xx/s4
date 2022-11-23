@@ -3,6 +3,7 @@ use crate::core::memory::array::Array;
 use crate::parser::parse_result::ParseResult;
 use crate::cache::cache::CacheData;
 use crate::pipeline::table::Table;
+use crate::pipeline::table::FlowEntry;
 use crate::pipeline::table::ActionSet;
 use crate::pipeline::tx_conf::TxConf;
 
@@ -27,12 +28,12 @@ pub fn search_table(pipeline_args_ptr: i64, table_id: i32) -> i64 {
     let PipelineArgs { table_list, pkt, parse_result, is_cache, cache_data, tx_conf: _ } = pipeline_args;
 
     if *is_cache {
-        &cache_data[table_id as usize] as *const ActionSet as i64
+        &unsafe { &*cache_data[table_id as usize] }.action as *const ActionSet as i64
     } else {
         let table = table_list[table_id as usize].read().unwrap();
-        let action_set = table.search(*pkt as *const u8, *parse_result);
-        cache_data[table_id as usize] = action_set.clone();
-        action_set as *const ActionSet as i64
+        let flow_entry = table.search(*pkt as *const u8, *parse_result);
+        cache_data[table_id as usize] = flow_entry as *const FlowEntry;
+        &flow_entry.action as *const ActionSet as i64
     }
 }
 
