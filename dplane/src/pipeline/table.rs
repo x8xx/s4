@@ -39,7 +39,7 @@ pub struct MatchFieldValue {
 #[derive(Clone)]
 pub struct ActionSet {
     pub action_id: u8,
-    pub action_data: Array<Array<i32>>,
+    pub action_data: Array<i32>,
 }
 
 

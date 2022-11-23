@@ -9,6 +9,7 @@ use std::net::TcpListener;
 use std::ffi::c_void;
 use crate::config::*;
 use crate::core::network::interface::Interface;
+use crate::core::memory::heap::Heap;
 use crate::core::memory::array::Array;
 use crate::core::memory::ring;
 use crate::core::thread::thread::spawn;
@@ -43,6 +44,8 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     for (i, table_conf) in table_confs.iter().enumerate() {
         table_list.init(i, RwLock::new(Table::new(table_conf, header_list.clone())));
     }
+
+    // initial flowentry
 
 
     let interface_configs_len = switch_config.interface_configs.len();
@@ -89,7 +92,9 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         });
     }
 
-
+    // 512MB
+    let mut heap = Heap::new(536870912); 
+    
     // rx_args_list
     // tx_args_list
     let mut rx_args_list = Array::<worker::rx::RxArgs>::new(switch_config.interface_configs.len());
@@ -106,9 +111,11 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             {
                 for k in 0..l2_cache_list[i][j].len() {
                     l2_cache_list[i][j].init(k, RwLock::new(CacheElement {
-                        key: Array::new(header_max_size),
+                        // key: Array::new(header_max_size),
+                        key: heap.malloc(header_max_size),
                         key_len: 0,
-                        data: Array::new(table_list.len()),
+                        // data: Array::new(table_list.len()),
+                        data: heap.malloc(table_list.len()),
                     }));
                 }
             }
@@ -130,9 +137,11 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         {
             for j in 0..l1_cache_list[i].len() {
                 l1_cache_list[i].init(j, RwLock::new(CacheElement {
-                    key: Array::new(header_max_size),
+                    // key: Array::new(header_max_size),
+                    key: heap.malloc(header_max_size),
                     key_len: 0,
-                    data: Array::new(table_list.len()),
+                    // data: Array::new(table_list.len()),
+                    data: heap.malloc(table_list.len()),
                 }));
             }
         }

@@ -98,12 +98,11 @@ pub fn get_action_id(action_set_ptr: i64) -> i32 {
 }
 
 
-pub fn get_action_data(action_set_ptr: i64, index: i32, offset: i32) -> i32 {
+pub fn get_action_data(action_set_ptr: i64, index: i32) -> i32 {
     let action_set = unsafe {
         & *(action_set_ptr as *const ActionSet)
     };
-    let action_data = &action_set.action_data[index as usize];
-    action_data[offset as usize]
+    action_set.action_data[index as usize]
 }
 
 

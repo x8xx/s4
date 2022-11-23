@@ -18,7 +18,7 @@ extern {
 
     // action
     pub fn s4_sys_get_action_id(action_set_ptr: i64) -> i32;
-    pub fn s4_sys_get_action_data(action_set_ptr: i64, index: i32, offset: i32) -> i32;
+    pub fn s4_sys_get_action_data(action_set_ptr: i64, index: i32) -> i32;
 
     // where to send
     pub fn s4_sys_to_controller(pipeline_args_ptr: i64);
