@@ -42,10 +42,17 @@ impl<T> Array<T> {
         }
     }
 
+    pub fn new_manual(data: *mut T, len: usize) -> Self {
+        Array {
+            data,
+            memzone: null_mut(),
+            len,
+        }
+    }
+
     pub fn init(&mut self, index: usize,  value: T) {
         unsafe {
             std::ptr::write::<T>(self.data.offset(index as isize), value);
-            // *self.data.offset(index as isize) = value; 
         }
     }
 
@@ -73,7 +80,9 @@ impl<T> Array<T> {
 
     pub fn free(self) {
         unsafe {
-            dpdk_sys::rte_memzone_free(self.memzone);
+            if self.memzone != null_mut() {
+                dpdk_sys::rte_memzone_free(self.memzone);
+            }
         }
     }
 

@@ -32,6 +32,13 @@ impl<T> Array<T> {
         }
     }
 
+    pub fn new_manual(data: *mut T, len: usize) -> Self {
+        Array {
+            data,
+            len,
+        }
+    }
+
     pub fn init(&mut self, index: usize,  value: T) {
         unsafe {
             std::ptr::write::<T>(self.data.offset(index as isize), value);
