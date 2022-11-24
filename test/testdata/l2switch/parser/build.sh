@@ -1,0 +1,1 @@
+../../../libs4_wasm/parser_build.sh
