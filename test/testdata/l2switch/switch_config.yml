@@ -10,5 +10,5 @@ general:
   l2_cache_size: 65535
   l3_cache_tuple_size: 65535
 interfaces:
-  net_tap0:
+  0000:4d:00.0:
     cache_core_num: 2

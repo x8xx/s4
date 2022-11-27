@@ -37,9 +37,6 @@ impl Parser {
             parse_result,
         };
         runtime::set_runtime_arg_i64!(self.runtime_args, 0, &parser_args as *const ParserArgs as i64);
-        // runtime::set_runtime_arg_i64!(self.runtime_args, 0, pkt as i64);
-        // runtime::set_runtime_arg_i32!(self.runtime_args, 1, pkt_len as i32);
-        // runtime::set_runtime_arg_i64!(self.runtime_args, 2, parse_result as *mut ParseResult as i64);
 
         let is_accept = runtime::call_runtime_i32!(self.runtime, "parse", self.runtime_args);
         if is_accept == 1 {

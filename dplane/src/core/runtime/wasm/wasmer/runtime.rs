@@ -39,13 +39,13 @@ macro_rules! new_runtime {
 
 macro_rules! set_runtime_arg_i64  {
     ($runtime_args: expr, $index: expr, $value: expr) => {
-        $runtime_args[$index] = wasmer::Value::I64($value);
+        $runtime_args.init($index, wasmer::Value::I64($value));
     }
 }
 
 macro_rules! set_runtime_arg_i32  {
     ($runtime_args: expr, $index: expr, $value: expr) => {
-        $runtime_args[$index] = wasmer::Value::I32($value);
+        $runtime_args.init($index, wasmer::Value::I32($value));
     }
 }
 

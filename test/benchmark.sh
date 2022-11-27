@@ -12,6 +12,7 @@ _benchmark() {
     if [ "$RUNAPP" == "s4" ]
     then
         sudo ../../../dplane/target/release/s4dp -c 0x7f --vdev=net_tap0,iface=test1 -- -c ./switch_config.yml
+        # sudo ../../../dplane/target/debug/s4dp -c 0x7f --vdev=net_tap0,iface=test1 -- -c ./switch_config.yml
     fi
 
     if [ "$RUNAPP" == "e_pktgen" ]
