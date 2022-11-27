@@ -6,13 +6,14 @@ edition = "2021"
 [features]
 default = ["prod"]
 # default = ["debug"]
-prod = ["dpdk", "runtime_wasm", "wasm_wasmer"]
+prod = ["dpdk", "runtime_wasm", "wasm_wasmer", "wasmer_llvm"]
 debug = ["linux", "runtime_wasm", "wasm_wasmer"]
 
 dpdk = []
 linux = []
 runtime_wasm = []
 wasm_wasmer = []
+wasmer_llvm = ["dep:wasmer-compiler-llvm"]
 
 [dependencies]
 # dpdk feature only
@@ -24,7 +25,8 @@ pnet = "0.30.0"
 getopts = "0.2.19"
 # murmurhash3 = "0.0.5"
 wasmer = "2.3.0"
-wasmer-compiler-llvm = "2.3.0"
+wasmer-compiler-llvm =  { version = "2.3.0", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 yaml-rust = "0.4.5"
+

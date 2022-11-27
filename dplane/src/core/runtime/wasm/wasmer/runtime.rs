@@ -9,8 +9,12 @@ macro_rules! new_runtime_args {
 macro_rules! new_runtime {
     ($wasm: expr, { $( $native_func_name: expr => $native_func: ident, )* }) => {
         {
-            let llvm_compiler = wasmer_compiler_llvm::LLVM::default();
-            let store = wasmer::Store::new(&wasmer::Universal::new(llvm_compiler).engine());
+            let store = wasmer::Store::default();
+            #[cfg(feature="wasmer_llvm")]
+            let store = {
+                let llvm_compiler = wasmer_compiler_llvm::LLVM::default();
+                wasmer::Store::new(&wasmer::Universal::new(llvm_compiler).engine())
+            };
             let module = wasmer::Module::from_binary(&store, $wasm).unwrap();
 
             let linear_memory = wasmer::Memory::new(&store, wasmer::MemoryType::new(1, None, false)).unwrap();
