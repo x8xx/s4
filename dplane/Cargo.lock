@@ -1236,6 +1236,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4501abdff3ae82a1c1b477a17252eb69cee9e66eb915c1abaa4f44d873df9f09"
 
 [[package]]
+name = "s4dp"
+version = "0.1.0"
+dependencies = [
+ "getopts",
+ "libc",
+ "pnet",
+ "rust-dpdk-sys",
+ "serde",
+ "serde_json",
+ "wasmer",
+ "wasmer-compiler-llvm",
+ "yaml-rust",
+]
+
+[[package]]
 name = "scopeguard"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1334,21 +1349,6 @@ name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
-
-[[package]]
-name = "switch_dp"
-version = "0.1.0"
-dependencies = [
- "getopts",
- "libc",
- "pnet",
- "rust-dpdk-sys",
- "serde",
- "serde_json",
- "wasmer",
- "wasmer-compiler-llvm",
- "yaml-rust",
-]
 
 [[package]]
 name = "syn"

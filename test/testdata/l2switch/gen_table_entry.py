@@ -13,6 +13,7 @@ with open(dir + '/init_table_entry.s4bin', 'wb') as f:
         bin.append(0)
         # entry buf size
         bin.append(13)
+        bin.append(0)
 
         # value count
         bin.append(1)
@@ -30,7 +31,7 @@ with open(dir + '/init_table_entry.s4bin', 'wb') as f:
         # priority
         bin.append(1)
         # action_id
-        bin.append(1)
+        bin.append(0)
         # action data len
         bin.append(1)
         # action data

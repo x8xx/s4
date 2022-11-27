@@ -1,0 +1,14 @@
+general:
+  dataplane_config_path: "./dataplane.json"
+  parser_wasm_path: "./parser/parser.wasm"
+  pipeline_wasm_path: "./pipeline/pipeline.wasm"
+  initial_table_data_path: "./init_table_entry.s4bin"
+  listen_address: "127.0.0.1:8888"
+  cache_core_num: 2
+  pipeline_core_num: 2
+  l1_cache_size: 65535
+  l2_cache_size: 65535
+  l3_cache_tuple_size: 65535
+interfaces:
+  net_tap0:
+    cache_core_num: 2

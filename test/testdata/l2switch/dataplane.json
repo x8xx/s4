@@ -1,0 +1,23 @@
+{
+    "headers": [
+        {
+            "fields": [48, 48, 16],
+            "used_fields": [0],
+            "parse_fields": []
+        }
+    ],
+    "header_max_size": 14,
+    "tables": [
+        {
+            "keys": [
+                {
+                    "match_kind": "exact",
+                    "header_id": 0,
+                    "field_id": 0
+                }
+            ],
+            "default_action_id": 2,
+            "max_size": 100000
+        }
+    ]
+}

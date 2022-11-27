@@ -124,3 +124,12 @@ pub fn drop(pipeline_args_ptr: i64) {
 
     (*tx_conf).is_drop = true;
 }
+
+pub fn flooding(pipeline_args_ptr: i64) {
+    let tx_conf= unsafe {
+        let pipeline_args = &mut *(pipeline_args_ptr as *mut PipelineArgs);
+        &mut pipeline_args.tx_conf
+    };
+
+    (*tx_conf).is_flooding= true;
+}

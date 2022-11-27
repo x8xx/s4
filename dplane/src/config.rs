@@ -109,7 +109,7 @@ pub fn parse_switch_args(args: &[String]) -> SwitchConfig {
     };
 
     // initial table data
-    let initial_table_data_path = get_string_from_yaml_value(yaml_config_general, "initial_table_data");
+    let initial_table_data_path = get_string_from_yaml_value(yaml_config_general, "initial_table_data_path");
     let initial_table_data = {
         let mut f = fs::File::open(&initial_table_data_path).unwrap();
         let metadata = std::fs::metadata(&initial_table_data_path).unwrap();

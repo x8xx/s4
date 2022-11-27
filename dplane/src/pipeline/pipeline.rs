@@ -21,6 +21,7 @@ use crate::pipeline::runtime_native_api::get_action_id;
 use crate::pipeline::runtime_native_api::get_action_data;
 use crate::pipeline::runtime_native_api::to_controller;
 use crate::pipeline::runtime_native_api::drop;
+use crate::pipeline::runtime_native_api::flooding;
 
 
 pub struct Pipeline {
@@ -45,6 +46,7 @@ impl Pipeline {
                 "s4_sys_get_action_data" => get_action_data,
                 "s4_sys_to_controller" => to_controller,
                 "s4_sys_drop" => drop,
+                "s4_sys_flooding" => flooding,
             }
         );
 

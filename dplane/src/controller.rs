@@ -57,6 +57,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             let entry_buf_size = ((initial_table_data[pos + 1] as u16) << 8) + initial_table_data[pos] as u16;
             pos += 2;
             table_controller::add_flow_entry(&mut table_list[table_id as usize], &initial_table_data[pos..pos+entry_buf_size as usize]);
+            pos += entry_buf_size as usize;
         }
     }
 

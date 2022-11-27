@@ -111,6 +111,13 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 continue;
             }
 
+            if pipeline_result.tx_conf.is_flooding {
+                for j in 1..pipeline_args.tx_ring_list.len() {
+                    pipeline_args.tx_ring_list[j].enqueue(pipeline_result);
+                }
+                continue;
+            }
+
             pipeline_args.tx_ring_list[pipeline_result.tx_conf.output_port].enqueue(pipeline_result);
         }
 
