@@ -19,11 +19,11 @@ with open(dir + '/init_table_entry.s4bin', 'wb') as f:
         # value len
         bin.append(6)
         # dst mac address
-        bin.append(1)
-        bin.append(2)
-        bin.append(3)
-        bin.append(4)
-        bin.append(5)
+        bin.append(0)
+        bin.append(0)
+        bin.append(0)
+        bin.append(0)
+        bin.append(0)
         bin.append(i)
         # va;ue prefix mask
         bin.append(0xff)

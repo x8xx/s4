@@ -11,3 +11,4 @@ rust-dpdk-sys = { git = "https://github.com/x8xx/rust-dpdk.git", rev = "3c72af1a
 modular-bitfield-msb = { git = "https://github.com/x8xx/modular-bitfield-msb.git", rev = "37d054dcd9b5653fa8aa3148d9cc23f082b1a8cc" }
 yaml-rust = "0.4.5"
 rand = "0.8.5"
+libloading = "0.7.4"

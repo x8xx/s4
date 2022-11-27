@@ -1,7 +1,5 @@
-// mod run;
 mod method;
 mod header;
-// mod device;
 mod gen;
 mod dpdk;
 mod tx;
@@ -11,9 +9,7 @@ mod rx;
 use std::env;
 use std::fs;
 use std::ffi::c_void;
-// use std::collections::HashMap;
 use yaml_rust::YamlLoader;
-// use crate::method::FnMethod;
 
 
 fn main() {
@@ -33,6 +29,8 @@ fn main() {
     println!("tap_name: {}", tap_name);
     println!("execution_time: {}", execution_time);
 
+    let gen_lib_path = &pktgen_args[1];
+
     let interface = dpdk::interface::Interface::new(&interface_name);
 
     let rx_args = rx::RxArgs {
@@ -51,6 +49,7 @@ fn main() {
         tap_name: tap_name.clone(),
         execution_time,
         tx_args: &tx_args as *const tx::TxArgs as *mut c_void,
+        gen_lib_path: gen_lib_path.to_string(),
     };
 
     if !dpdk::thread::spawn(gen::start_gen, &gen_args as *const gen::GenArgs as *mut c_void) {

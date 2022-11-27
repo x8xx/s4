@@ -39,6 +39,7 @@ pub struct GenArgs {
     pub tap_name: String,
     pub execution_time: u64,
     pub tx_args: *mut c_void,
+    pub gen_lib_path: String,
 }
 
 
@@ -62,34 +63,36 @@ pub extern "C" fn start_gen(gen_args_ptr: *mut c_void) -> i32 {
 
     let mut tap_tx = get_tap_tx(&gen_args.tap_name);
 
-    let pkt_ringbuf = RingBuf::<Array<u8>>::new(4096);
-    {
-        let ptr_array = Array::<&mut Array<u8>>:: new(pkt_ringbuf.len()); 
-        pkt_ringbuf.malloc_bulk(ptr_array.as_slice(), ptr_array.len());
-        for (_, element) in ptr_array.as_slice().iter_mut().enumerate() {
-            **element = Array::<u8>::new(64);
-        }
-        pkt_ringbuf.free_bulk(ptr_array.as_slice(), ptr_array.len());
-        ptr_array.free();
+    let mut pkt_buf_list: Array<Array<u8>> = Array::new(4096);
+    let mut pkt_buf_ptr_list: Array<*mut u8> = Array::new(4096);
+    for i in 0..pkt_buf_list.len() {
+        pkt_buf_list.init(i, Array::new(64));
+        pkt_buf_ptr_list.init(i, pkt_buf_list[i].as_ptr());
     }
 
+    // launch tx thread
     if !spawn(tx::start_tx, gen_args.tx_args) {
         cleanup();
         panic!("faild start thread tx");
     }
 
-
     // let start_time = Instant::now();
     let end_time = Instant::now() + Duration::from_secs(gen_args.execution_time + 10);
+    let libpktgen = unsafe { libloading::Library::new(&gen_args.gen_lib_path).unwrap() };
+    let fn_pktgen = unsafe { libpktgen.get::<libloading::Symbol<unsafe extern fn(buf_list: *mut *mut u8) -> usize>>(b"pktgen").unwrap() };
     loop {
-        let buf = pkt_ringbuf.malloc();
-        tap_tx.send_to(buf.as_slice(), None);
-        pkt_ringbuf.free(buf);
+        let gen_count = unsafe { fn_pktgen(pkt_buf_ptr_list.as_ptr()) };
+
+        for i in 0..gen_count {
+            tap_tx.send_to(pkt_buf_list[i].as_slice(), None);
+        }
 
         if end_time < Instant::now() {
-            break;
+            return 0;
+        }
+
+        if false {
+            return 0;
         }
     }
-
-    0
 }
