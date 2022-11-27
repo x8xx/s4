@@ -23,4 +23,5 @@ extern {
     // where to send
     pub fn s4_sys_to_controller(pipeline_args_ptr: i64);
     pub fn s4_sys_drop(pipeline_args_ptr: i64);
+    pub fn s4_sys_flooding(pipeline_args_ptr: i64);
 }

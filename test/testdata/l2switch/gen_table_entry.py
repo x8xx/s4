@@ -1,4 +1,7 @@
-with open('init_table_entry.s4bin', 'wb') as f:
+import os
+
+dir = os.path.dirname(__file__)
+with open(dir + '/init_table_entry.s4bin', 'wb') as f:
     bin = bytearray([])
     # entry_count
     bin.append(48)
