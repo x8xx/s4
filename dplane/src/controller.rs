@@ -76,28 +76,32 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let cache_creater_ring = ring::Ring::new(1024);
 
 
-    let rx_batch_count = 32;
+    let rx_batch_count = 128;
     let cache_batch_count = 32;
     let pipeline_batch_count = 32;
     let tx_batch_count = 32;
 
 
-    let mut tx_ring_list = Array::<ring::Ring>::new(switch_config.interface_configs.len());
-    for i in 0..switch_config.interface_configs.len() {
+    let mut tx_ring_list = Array::<ring::Ring>::new(switch_config.interface_configs.len() + 1);
+    for i in 0..tx_ring_list.len() {
         tx_ring_list.init(i, ring::Ring::new(1024));
     }
 
 
     // to pipeline ring list
     // pipeline_args_list
-    let mut pipeline_ring_list = Array::<ring::Ring>::new(switch_config.pipeline_core_num as usize);
+    let mut pipeline_ring_from_rx_list = Array::<ring::Ring>::new(switch_config.pipeline_core_num as usize);
+    let mut pipeline_ring_from_cache_list = Array::<ring::Ring>::new(switch_config.pipeline_core_num as usize);
     let mut pipeline_args_list = Array::<worker::pipeline::PipelineArgs>::new(switch_config.pipeline_core_num as usize);
 
     for i in 0..pipeline_args_list.len() {
-        pipeline_ring_list.init(i, ring::Ring::new(1024));
+        pipeline_ring_from_rx_list.init(i, ring::Ring::new(1024));
+        pipeline_ring_from_cache_list.init(i, ring::Ring::new(1024));
+
         pipeline_args_list.init(i, worker::pipeline::PipelineArgs {
             pipeline: Pipeline::new(&switch_config.pipeline_wasm, table_list.clone()),
-            ring: pipeline_ring_list[i].clone(),
+            ring_from_rx: pipeline_ring_from_rx_list[i].clone(),
+            ring_from_cache: pipeline_ring_from_cache_list[i].clone(),
             batch_count: pipeline_batch_count,
             table_list_len: table_list.len(),
             header_max_size,
@@ -141,7 +145,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
                 header_max_size,
                 l2_cache: l2_cache_list[i][j].clone(),
                 l3_cache: &l3_cache,
-                pipeline_ring_list: pipeline_ring_list.clone(),
+                pipeline_ring_list: pipeline_ring_from_cache_list.clone(),
             });
         }
 
@@ -173,14 +177,14 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             l2_key_max_len: 30,
             header_list: header_list.clone(),
             cache_ring_list,
-            pipeline_ring_list: pipeline_ring_list.clone(),
+            pipeline_ring_list: pipeline_ring_from_rx_list.clone(),
         });
 
 
         println!("init: tx core tx-{}", i);
         tx_args_list.init(i, worker::tx::TxArgs {
             interface: interface.clone(),
-            ring: tx_ring_list[i].clone(),
+            ring: tx_ring_list[i + 1].clone(),
             batch_count: tx_batch_count,
         });
     }

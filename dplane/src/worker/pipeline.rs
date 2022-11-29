@@ -15,7 +15,8 @@ use crate::worker::cache::CacheResult;
 #[repr(C)]
 pub struct PipelineArgs {
     pub pipeline: Pipeline,
-    pub ring: Ring,
+    pub ring_from_rx: Ring,
+    pub ring_from_cache: Ring,
 
     pub batch_count: usize,
     pub table_list_len: usize,
@@ -87,13 +88,15 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
     let cache_result_list = Array::<&mut CacheResult>::new(pipeline_args.batch_count);
     loop {
         // from rx (through cache core)
-        let rx_result_dequeue_count = pipeline_args.ring.dequeue_burst::<RxResult>(&rx_result_list, pipeline_args.batch_count);
+        let rx_result_dequeue_count = pipeline_args.ring_from_rx.dequeue_burst::<RxResult>(&rx_result_list, pipeline_args.batch_count);
         for i in 0..rx_result_dequeue_count {
+        // println!("rx?????");
             let rx_result = rx_result_list.get(i);
             let pipeline_result = pipeline_result_ringbuf.malloc();
             pipeline_result.tx_conf.init();
             pipeline_result.rx_result = *rx_result as *mut RxResult;
 
+            // println!("pp check 1");
             let RxResult {
                 owner_ring: _,
                 id: _,
@@ -105,26 +108,33 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
             } = rx_result_list.get(i);
 
             pipeline_args.pipeline.run_cache_pipeline(rx_result_list.get(i).raw_pkt, parse_result, cache_data, &mut pipeline_result.tx_conf);
+            // println!("pp check 2");
 
             if pipeline_result.tx_conf.is_drop {
+                println!("moshiya drop?");
                 rx_result_list.get(i).free();
                 continue;
             }
 
             if pipeline_result.tx_conf.is_flooding {
+                println!("moshiya?");
                 for j in 1..pipeline_args.tx_ring_list.len() {
                     pipeline_args.tx_ring_list[j].enqueue(pipeline_result);
                 }
                 continue;
             }
+            // println!("pp check 3");
+        // println!("rx????? done");
 
+            println!("output port {}", pipeline_result.tx_conf.output_port);
             pipeline_args.tx_ring_list[pipeline_result.tx_conf.output_port].enqueue(pipeline_result);
         }
 
 
         // // from cache
-        let cache_result_dequeue_count = pipeline_args.ring.dequeue_burst::<CacheResult>(&cache_result_list, pipeline_args.batch_count);
+        let cache_result_dequeue_count = pipeline_args.ring_from_cache.dequeue_burst::<CacheResult>(&cache_result_list, pipeline_args.batch_count);
         for i in 0..cache_result_dequeue_count {
+            // println!("?????");
             let pipeline_result = pipeline_result_ringbuf.malloc();
             pipeline_result.tx_conf.init();
 
@@ -172,6 +182,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 pipeline_args.cache_creater_ring.enqueue(new_cache_element);
             }
 
+            println!("output port {}", pipeline_result.tx_conf.output_port);
             pipeline_args.tx_ring_list[pipeline_result.tx_conf.output_port].enqueue(pipeline_result);
         }
 

@@ -24,6 +24,7 @@ pub extern "C" fn start_tx(tx_args_ptr: *mut c_void) -> i32 {
             let PipelineResult { owner_ring: _, rx_result, tx_conf } = pipeline_result_list.get(i);
             let rx_result = unsafe { &mut **rx_result };
 
+            // println!("debug");
             tx_args.interface.tx(&mut rx_result.pktbuf);
             rx_result.free();
             pipeline_result_list.get(i).free();

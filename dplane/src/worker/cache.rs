@@ -85,6 +85,7 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
             cache_result.is_cache_hit = false;
             cache_result.rx_result = (*rx_result) as *mut RxResult;
 
+            // println!("cache check 1");
             if hash_calc_result.is_lbf_hit {
                 // l2 cache
                 let cache_element = cache_args.l2_cache[hash_calc_result.l2_hash as usize].read().unwrap();
@@ -97,17 +98,18 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
                     continue;
                 }
             }
+            // println!("cache check 2");
 
 
             // l3 cache (tss)
-            let cache_data = cache_args.l3_cache.search(rx_result.raw_pkt, &mut tss_key_store);
-            match cache_data {
-                Some(cache_data) => {
-                    cache_result.cache_data = cache_data;
-                    cache_result.is_cache_hit = true;
-                },
-                None => {},
-            }
+            // let cache_data = cache_args.l3_cache.search(rx_result.raw_pkt, &mut tss_key_store);
+            // match cache_data {
+            //     Some(cache_data) => {
+            //         cache_result.cache_data = cache_data;
+            //         cache_result.is_cache_hit = true;
+            //     },
+            //     None => {},
+            // }
 
             cache_args.pipeline_ring_list[next_pipeline_core].enqueue(cache_result);
             next_pipeline_core = next_core(next_pipeline_core, cache_args.pipeline_ring_list.len());

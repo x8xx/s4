@@ -112,10 +112,13 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     loop {
         let pkt_count = rx_args.interface.rx(&mut pktbuf_list[0], rx_args.batch_count);
         for i in 0..pkt_count as usize {
+            println!("pkt count {}", pkt_count);
             let rx_result = rx_result_ring_buf.malloc();
 
             rx_result.pktbuf = pktbuf_list.get(i).clone();
             let (pkt, pkt_len) = rx_result.pktbuf.get_raw_pkt();
+            unsafe { println!("dst_mac_address {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(0), *pkt.offset(1), *pkt.offset(2), *pkt.offset(3), *pkt.offset(4), *pkt.offset(5)) };
+            unsafe { println!("src_mac_address {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(6), *pkt.offset(7), *pkt.offset(8), *pkt.offset(9), *pkt.offset(10), *pkt.offset(11)) };
             if  !rx_args.parser.parse(pkt, pkt_len, &mut rx_result.parse_result) {
                 continue;
             }
@@ -123,6 +126,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             rx_result.raw_pkt = pkt;
             rx_result.pktbuf = pktbuf_list[i].clone();
             
+            // println!("rx check 1");
 
             // l1_cache
             let l1_hash = l1_hash_function_murmurhash3(pkt, rx_result.parse_result.hdr_size, rx_args.l1_hash_seed);
@@ -137,12 +141,14 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 }
                 continue;
             }
+            // println!("rx check 2");
 
 
             let hash_calc_result = hash_calc_result_ring_buf.malloc();
             hash_calc_result.is_lbf_hit = false;
             hash_calc_result.l1_hash = l1_hash;
 
+            // println!("rx check 3");
 
             // lbf
             let parsed_header_list = &rx_result.parse_result.header_list;
@@ -169,6 +175,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 }
             }
             hash_calc_result.l2_key_len = l2_key_next_offset as u8;
+            // println!("rx check 4");
 
             let l2_hash = l2_hash_function_murmurhash3(l2_key_ptr, hash_calc_result.l2_key_len as usize, rx_args.l2_hash_seed);
             hash_calc_result.l2_hash = l2_hash;
@@ -183,6 +190,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 cache_core = next_cache_core as usize;
             // hit
             } else {
+                // println!("check11");
                 hash_calc_result.is_lbf_hit = true;
             }
 
