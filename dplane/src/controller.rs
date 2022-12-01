@@ -137,7 +137,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
                     }));
                 }
             }
-            cache_args_list.init(j, worker::cache::CacheArgs {
+            cache_args_list.init(i, worker::cache::CacheArgs {
                 id: j,
                 ring: cache_ring_list[j].clone(),
                 batch_count: cache_batch_count,
