@@ -1,6 +1,7 @@
 import os
 
-dir = os.path.dirname(__file__)
+dir = os.path.dirname(os.path.abspath(__file__))
+print(dir)
 with open(dir + '/init_table_entry.s4bin', 'wb') as f:
     bin = bytearray([])
     # entry_count
