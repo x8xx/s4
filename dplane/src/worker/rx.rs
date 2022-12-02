@@ -23,7 +23,7 @@ pub struct RxArgs {
     pub parser: Parser,
 
     pub batch_count: usize,
-    pub pktbuf_len: usize,
+    pub pktbuf_size: usize,
 
     // cache
     pub l1_hash_seed: u32,
@@ -82,11 +82,11 @@ impl HashCalcResult {
 
 
 pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
-    println!("Init Rx Core");
     let rx_args = unsafe { &mut *transmute::<*mut c_void, *mut RxArgs>(rx_args_ptr) };
+    println!("Init Rx{} Core", rx_args.id);
 
     // init ringbuf
-    let mut rx_result_ring_buf = RingBuf::<RxResult>::new(rx_args.pktbuf_len);
+    let mut rx_result_ring_buf = RingBuf::<RxResult>::new(rx_args.pktbuf_size);
     {
         let rx_result_array = malloc_ringbuf_all_element!(rx_result_ring_buf, RxResult);
         for (_, rx_result) in rx_result_array.as_slice().iter_mut().enumerate() {
@@ -100,7 +100,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
 
     // init hash_calc_result
-    let mut hash_calc_result_ring_buf = RingBuf::<HashCalcResult>::new(rx_args.pktbuf_len * 2);
+    let mut hash_calc_result_ring_buf = RingBuf::<HashCalcResult>::new(rx_args.pktbuf_size);
     init_ringbuf_element!(hash_calc_result_ring_buf, HashCalcResult, {
         owner_ring => &mut hash_calc_result_ring_buf as *mut RingBuf<HashCalcResult>,
         l2_key => Array::new(rx_args.l2_key_max_len as usize),
@@ -113,7 +113,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
     let mut count = 0;
 
-    println!("Start Rx Core");
+    println!("Start Rx{} Core", rx_args.id);
     loop {
         let pkt_count = rx_args.interface.rx(&mut pktbuf_list[0], rx_args.batch_count);
         for i in 0..pkt_count as usize {

@@ -14,6 +14,7 @@ use crate::worker::cache::CacheResult;
 
 #[repr(C)]
 pub struct PipelineArgs {
+    pub id: usize,
     pub pipeline: Pipeline,
     pub ring_from_rx: Ring,
     pub ring_from_cache: Ring,
@@ -21,6 +22,7 @@ pub struct PipelineArgs {
     pub batch_count: usize,
     pub table_list_len: usize,
     pub header_max_size: usize,
+    pub buf_size: usize,
 
     pub tx_ring_list: Array<Ring>,
     pub cache_creater_ring: Ring,
@@ -64,19 +66,19 @@ impl NewCacheElement {
 
 
 pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
-    println!("Start Pipeline Core");
     let pipeline_args = unsafe { &mut *transmute::<*mut c_void, *mut PipelineArgs>(pipeline_args_ptr) };
+    println!("Init Pipeline{} Core", pipeline_args.id);
 
 
     // init ringbuf (pipeline result)
-    let mut pipeline_result_ringbuf = RingBuf::<PipelineResult>::new(1024);
+    let mut pipeline_result_ringbuf = RingBuf::<PipelineResult>::new(pipeline_args.buf_size);
     init_ringbuf_element!(pipeline_result_ringbuf, PipelineResult, {
         owner_ring => &mut pipeline_result_ringbuf as *mut RingBuf<PipelineResult>,
     });
 
 
     // init ringbuf (new cache)
-    let mut new_cache_element_ringbuf = RingBuf::<NewCacheElement>::new(1024);
+    let mut new_cache_element_ringbuf = RingBuf::<NewCacheElement>::new(pipeline_args.buf_size);
     init_ringbuf_element!(new_cache_element_ringbuf, NewCacheElement, {
         owner_ring => &mut new_cache_element_ringbuf as *mut RingBuf<NewCacheElement>,
         l1_key => Array::new(pipeline_args.header_max_size),
@@ -86,45 +88,42 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
 
     let rx_result_list = Array::<&mut RxResult>::new(pipeline_args.batch_count);
     let cache_result_list = Array::<&mut CacheResult>::new(pipeline_args.batch_count);
+
+    println!("Start Pipeline{} Core", pipeline_args.id);
     loop {
         // from rx (through cache core)
         let rx_result_dequeue_count = pipeline_args.ring_from_rx.dequeue_burst::<RxResult>(&rx_result_list, pipeline_args.batch_count);
         for i in 0..rx_result_dequeue_count {
-        // println!("rx?????");
             let rx_result = rx_result_list.get(i);
+            println!("pipeline malloc");
             let pipeline_result = pipeline_result_ringbuf.malloc();
+            println!("pipeline malloc ok");
             pipeline_result.tx_conf.init();
             pipeline_result.rx_result = *rx_result as *mut RxResult;
 
-            // println!("pp check 1");
             let RxResult {
                 owner_ring: _,
                 id: _,
                 pktbuf: _,
                 raw_pkt: _,
-                parse_result: ref parse_result,
-                cache_data: ref mut cache_data,
-                hash_calc_result: _
+                parse_result,
+                cache_data,
+                hash_calc_result: _,
             } = rx_result_list.get(i);
 
             pipeline_args.pipeline.run_cache_pipeline(rx_result_list.get(i).raw_pkt, parse_result, cache_data, &mut pipeline_result.tx_conf);
-            // println!("pp check 2");
 
             if pipeline_result.tx_conf.is_drop {
-                println!("moshiya drop?");
                 rx_result_list.get(i).free();
                 continue;
             }
 
             if pipeline_result.tx_conf.is_flooding {
-                println!("moshiya?");
                 for j in 1..pipeline_args.tx_ring_list.len() {
                     pipeline_args.tx_ring_list[j].enqueue(pipeline_result);
                 }
                 continue;
             }
-            // println!("pp check 3");
-        // println!("rx????? done");
 
             println!("output port {}", pipeline_result.tx_conf.output_port);
             pipeline_args.tx_ring_list[pipeline_result.tx_conf.output_port].enqueue(pipeline_result);
@@ -134,8 +133,9 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
         // // from cache
         let cache_result_dequeue_count = pipeline_args.ring_from_cache.dequeue_burst::<CacheResult>(&cache_result_list, pipeline_args.batch_count);
         for i in 0..cache_result_dequeue_count {
-            // println!("?????");
+            println!("pipeline malloc");
             let pipeline_result = pipeline_result_ringbuf.malloc();
+            println!("pipeline malloc ok");
             pipeline_result.tx_conf.init();
 
             let CacheResult {
@@ -165,7 +165,9 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 unsafe { (**hash_calc_result).free() };
             // no cache
             } else {
+                println!("new_cache malloc");
                 let new_cache_element = new_cache_element_ringbuf.malloc();
+                println!("new_cache malloc ok");
                 pipeline_args.pipeline.run_pipeline(*raw_pkt, parse_result, &mut new_cache_element.cache_data, &mut pipeline_result.tx_conf);
 
                 new_cache_element.l1_key_len = parse_result.hdr_size;

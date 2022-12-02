@@ -19,7 +19,7 @@ pub struct CacheArgs<'a> {
     pub ring: Ring,
 
     pub batch_count: usize,
-    pub buf_len: usize,
+    pub buf_size: usize,
     pub header_max_size: usize,
 
     // cache
@@ -58,11 +58,11 @@ fn next_core(mut current_core: usize, core_limit: usize) -> usize {
 
 
 pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
-    println!("Start Cache Core");
     let cache_args = unsafe { &mut *transmute::<*mut c_void, *mut CacheArgs>(cache_args_ptr) };
+    println!("Init Cache{} Core", cache_args.id);
 
     // init ringbuf
-    let mut cache_result_ring_buf = RingBuf::<CacheResult>::new(cache_args.buf_len);
+    let mut cache_result_ring_buf = RingBuf::<CacheResult>::new(cache_args.buf_size);
     init_ringbuf_element!(cache_result_ring_buf, CacheResult, {
         id => cache_args.id,
         owner_ring => &mut cache_result_ring_buf as *mut RingBuf<CacheResult>,
@@ -75,17 +75,20 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
         key: Array::new(cache_args.header_max_size),
         key_len: 0,
     };
+
+    println!("Start Cache{} Core", cache_args.id);
     loop {
         let rx_result_dequeue_count = cache_args.ring.dequeue_burst::<RxResult>(&rx_result_list, cache_args.batch_count);
         for i in 0..rx_result_dequeue_count {
+            println!("cache malloc");
             let cache_result = cache_result_ring_buf.malloc();
+            println!("cache malloc ok");
             let rx_result = rx_result_list.get(i);
             let hash_calc_result = unsafe { &mut *rx_result.hash_calc_result };
 
             cache_result.is_cache_hit = false;
             cache_result.rx_result = (*rx_result) as *mut RxResult;
 
-            // println!("cache check 1");
             if hash_calc_result.is_lbf_hit {
                 // l2 cache
                 let cache_element = cache_args.l2_cache[hash_calc_result.l2_hash as usize].read().unwrap();
@@ -98,7 +101,6 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
                     continue;
                 }
             }
-            // println!("cache check 2");
 
 
             // l3 cache (tss)

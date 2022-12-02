@@ -78,11 +78,11 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let pipeline_batch_count = 64;
     let tx_batch_count = 64;
 
-    let rx_buf_size = 4096;
-    let cache_buf_size = 4096;
-    let pipeline_buf_size = 4096;
-    let tx_buf_size = 4096;
-    let cache_creater_buf_size = 4096;
+    let rx_buf_size = 8192;
+    let cache_buf_size = 8192;
+    let pipeline_buf_size = 8192;
+    let tx_buf_size = 8192;
+    let cache_creater_buf_size = 8192;
 
 
     // to main core ring 
@@ -107,12 +107,14 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         pipeline_ring_from_cache_list.init(i, ring::Ring::new(pipeline_buf_size));
 
         pipeline_args_list.init(i, worker::pipeline::PipelineArgs {
+            id: i,
             pipeline: Pipeline::new(&switch_config.pipeline_wasm, table_list.clone()),
             ring_from_rx: pipeline_ring_from_rx_list[i].clone(),
             ring_from_cache: pipeline_ring_from_cache_list[i].clone(),
             batch_count: pipeline_batch_count,
             table_list_len: table_list.len(),
             header_max_size,
+            buf_size: pipeline_buf_size,
             tx_ring_list: tx_ring_list.clone(),
             cache_creater_ring: cache_creater_ring.clone(),
         });
@@ -149,7 +151,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
                 id: j,
                 ring: cache_ring_list[j].clone(),
                 batch_count: cache_batch_count,
-                buf_len: cache_buf_size,
+                buf_size: cache_buf_size,
                 header_max_size,
                 l2_cache: l2_cache_list[i][j].clone(),
                 l3_cache: &l3_cache,
@@ -177,7 +179,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             interface: interface.clone(),
             parser: parser::Parser::new(&switch_config.parser_wasm),
             batch_count: rx_batch_count,
-            pktbuf_len: rx_buf_size,
+            pktbuf_size: rx_buf_size,
             l1_hash_seed: 417,
             l2_hash_seed: 417,
             l1_cache: l1_cache_list[i].clone(),
@@ -191,6 +193,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
 
         println!("init: tx core tx-{}", i);
         tx_args_list.init(i, worker::tx::TxArgs {
+            id: i,
             interface: interface.clone(),
             ring: tx_ring_list[i + 1].clone(),
             batch_count: tx_batch_count,
@@ -200,20 +203,21 @@ pub fn start_controller(switch_config: &SwitchConfig) {
 
     // start worker
     println!("start workers");
-    for i in 0..rx_args_list.len() {
-        spawn(worker::rx::start_rx, &mut rx_args_list[i] as *mut worker::rx::RxArgs as *mut c_void);
+
+    for i in 0..pipeline_args_list.len() {
+        spawn(worker::pipeline::start_pipeline, &mut pipeline_args_list[i] as *mut worker::pipeline::PipelineArgs as *mut c_void);
     }
 
     for i in 0..cache_args_list.len() {
         spawn(worker::cache::start_cache, &mut cache_args_list[i] as *mut worker::cache::CacheArgs as *mut c_void);
     }
 
-    for i in 0..pipeline_args_list.len() {
-        spawn(worker::pipeline::start_pipeline, &mut pipeline_args_list[i] as *mut worker::pipeline::PipelineArgs as *mut c_void);
-    }
-
     for i in 0..tx_args_list.len() {
         spawn(worker::tx::start_tx, &mut tx_args_list[i] as *mut worker::tx::TxArgs as *mut c_void);
+    }
+
+    for i in 0..rx_args_list.len() {
+        spawn(worker::rx::start_rx, &mut rx_args_list[i] as *mut worker::rx::RxArgs as *mut c_void);
     }
 
 
