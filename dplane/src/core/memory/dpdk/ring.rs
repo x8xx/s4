@@ -39,8 +39,8 @@ impl Ring {
                 objs as *const &mut T as *const *mut c_void,
                 len as u32,
                 null_mut()
-            )
-        }.try_into().unwrap()
+            ) as usize
+        }
     }
 
     // pub fn dequeue_burst<T>(&self, objs: &mut &mut T, len: usize) -> usize {
@@ -51,8 +51,8 @@ impl Ring {
                 objs.as_ptr() as *mut *mut T as *mut *mut c_void,
                 len as u32,
                 null_mut()
-            )
-        }.try_into().unwrap()
+            ) as usize
+        }
     }
 
     pub fn enqueue<T>(&self, obj: &mut T) -> usize {
@@ -60,8 +60,8 @@ impl Ring {
             dpdk_sys::rte_ring_enqueue(
                 self.ring,
                 obj as *mut T as *mut c_void,
-            )
-        }.try_into().unwrap()
+            ) as usize
+        }
     }
 
     pub fn dequeue<T>(&self, obj: &mut &mut T) -> usize {
@@ -69,8 +69,8 @@ impl Ring {
             dpdk_sys::rte_ring_dequeue(
                 self.ring,
                 obj as *mut &mut T as *mut *mut T as *mut *mut c_void,
-            )
-        }.try_into().unwrap()
+            ) as usize
+        }
     }
 }
 
