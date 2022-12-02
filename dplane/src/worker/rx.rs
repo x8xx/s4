@@ -82,7 +82,7 @@ impl HashCalcResult {
 
 
 pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
-    println!("Start Rx Core");
+    println!("Init Rx Core");
     let rx_args = unsafe { &mut *transmute::<*mut c_void, *mut RxArgs>(rx_args_ptr) };
 
     // init ringbuf
@@ -92,6 +92,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
         for (_, rx_result) in rx_result_array.as_slice().iter_mut().enumerate() {
             rx_result.id = rx_args.id;
             rx_result.owner_ring = &mut rx_result_ring_buf as *mut RingBuf<RxResult>;
+            rx_result.parse_result.metadata.port = rx_args.id as u8 + 1;
             rx_result.parse_result.header_list = Array::new(rx_args.header_list.len());
         }
         free_ringbuf_all_element!(rx_result_ring_buf, rx_result_array);
@@ -109,24 +110,39 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     let mut next_pipeline_core = 0;
     let mut next_cache_core = 0;
     let mut pktbuf_list = Array::<PktBuf>::new(rx_args.batch_count);
+
+    let mut count = 0;
+
+    println!("Start Rx Core");
     loop {
         let pkt_count = rx_args.interface.rx(&mut pktbuf_list[0], rx_args.batch_count);
         for i in 0..pkt_count as usize {
-            println!("pkt count {}", pkt_count);
+            count += 1;
+            println!("count : {}", count);
+            println!("rx malloc");
             let rx_result = rx_result_ring_buf.malloc();
+            println!("rx malloc ok");
 
             rx_result.pktbuf = pktbuf_list.get(i).clone();
             let (pkt, pkt_len) = rx_result.pktbuf.get_raw_pkt();
-            unsafe { println!("dst_mac_address {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(0), *pkt.offset(1), *pkt.offset(2), *pkt.offset(3), *pkt.offset(4), *pkt.offset(5)) };
-            unsafe { println!("src_mac_address {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(6), *pkt.offset(7), *pkt.offset(8), *pkt.offset(9), *pkt.offset(10), *pkt.offset(11)) };
+            if pkt_len == 0 {
+                rx_result.free();
+                continue;
+            }
+
+
+            rx_result.parse_result.hdr_size = 0;
+            for i in 0..rx_result.parse_result.header_list.len() {
+                rx_result.parse_result.header_list[i].is_valid = false;
+            }
             if  !rx_args.parser.parse(pkt, pkt_len, &mut rx_result.parse_result) {
+                rx_result.free();
                 continue;
             }
 
             rx_result.raw_pkt = pkt;
             rx_result.pktbuf = pktbuf_list[i].clone();
             
-            // println!("rx check 1");
 
             // l1_cache
             let l1_hash = l1_hash_function_murmurhash3(pkt, rx_result.parse_result.hdr_size, rx_args.l1_hash_seed);
@@ -141,14 +157,15 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 }
                 continue;
             }
-            // println!("rx check 2");
+            println!("no hit?????????????");
 
 
+            println!("hash malloc");
             let hash_calc_result = hash_calc_result_ring_buf.malloc();
+            println!("hash malloc ok");
             hash_calc_result.is_lbf_hit = false;
             hash_calc_result.l1_hash = l1_hash;
 
-            // println!("rx check 3");
 
             // lbf
             let parsed_header_list = &rx_result.parse_result.header_list;
@@ -175,7 +192,6 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 }
             }
             hash_calc_result.l2_key_len = l2_key_next_offset as u8;
-            // println!("rx check 4");
 
             let l2_hash = l2_hash_function_murmurhash3(l2_key_ptr, hash_calc_result.l2_key_len as usize, rx_args.l2_hash_seed);
             hash_calc_result.l2_hash = l2_hash;
@@ -190,7 +206,6 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 cache_core = next_cache_core as usize;
             // hit
             } else {
-                // println!("check11");
                 hash_calc_result.is_lbf_hit = true;
             }
 

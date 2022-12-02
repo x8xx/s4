@@ -18,6 +18,9 @@ impl PktBuf {
 
     pub fn get_raw_pkt(&self) -> (*mut u8, usize) {
         unsafe {
+            if self.buf == null_mut() {
+                return (null_mut(), 0);
+            }
             let pkt = transmute::<*mut c_void, *mut u8>((*self.buf).buf_addr);
             let len = (*self.buf).data_len;
             let offset = (*self.buf).data_off;

@@ -72,19 +72,22 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let mut l3_cache = TupleSpace::new(10000);
 
 
-    // to main core ring 
-    let cache_creater_ring = ring::Ring::new(1024);
-
 
     let rx_batch_count = 64;
     let cache_batch_count = 64;
     let pipeline_batch_count = 64;
     let tx_batch_count = 64;
 
-    let rx_buf_size = 8192;
-    let cache_buf_size = 8192;
-    let pipeline_buf_size = 8192;
-    let tx_buf_size = 8192;
+    let rx_buf_size = 4096;
+    let cache_buf_size = 4096;
+    let pipeline_buf_size = 4096;
+    let tx_buf_size = 4096;
+    let cache_creater_buf_size = 4096;
+
+
+    // to main core ring 
+    let cache_creater_ring = ring::Ring::new(cache_creater_buf_size);
+
 
 
     let mut tx_ring_list = Array::<ring::Ring>::new(switch_config.interface_configs.len() + 1);
@@ -206,12 +209,10 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     }
 
     for i in 0..pipeline_args_list.len() {
-        println!("pp {}" , i);
         spawn(worker::pipeline::start_pipeline, &mut pipeline_args_list[i] as *mut worker::pipeline::PipelineArgs as *mut c_void);
     }
 
     for i in 0..tx_args_list.len() {
-        println!("tx {}" , i);
         spawn(worker::tx::start_tx, &mut tx_args_list[i] as *mut worker::tx::TxArgs as *mut c_void);
     }
 
