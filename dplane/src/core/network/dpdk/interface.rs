@@ -7,7 +7,7 @@ use crate::core::network::pktbuf;
 
 #[derive(Clone)]
 pub struct Interface {
-    port_number: u16,
+    pub port_number: u16,
 }
 
 impl Interface {
