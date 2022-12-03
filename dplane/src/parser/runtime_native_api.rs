@@ -8,13 +8,13 @@ pub struct ParserArgs {
 }
 
 
-pub fn get_pkt_len(parser_args_ptr: i64) -> i32 {
+pub fn pkt_get_len(parser_args_ptr: i64) -> i32 {
     unsafe {
         (*(parser_args_ptr as *const ParserArgs)).pkt_len as i32
     }
 }
 
-pub fn read_pkt(parser_args_ptr: i64, offset: i32) -> i32 {
+pub fn pkt_read(parser_args_ptr: i64, offset: i32) -> i32 {
     unsafe {
         *(*(parser_args_ptr as *const ParserArgs)).pkt.offset(offset as isize) as i32
     }

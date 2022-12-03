@@ -1,8 +1,8 @@
 use crate::core::runtime::wasm::runtime;
 use crate::parser::parse_result::ParseResult;
 use crate::parser::runtime_native_api::ParserArgs;
-use crate::parser::runtime_native_api::get_pkt_len;
-use crate::parser::runtime_native_api::read_pkt;
+use crate::parser::runtime_native_api::pkt_get_len;
+use crate::parser::runtime_native_api::pkt_read;
 use crate::parser::runtime_native_api::extract_hdr;
 
 
@@ -16,8 +16,8 @@ impl Parser {
         let runtime = runtime::new_runtime!(
             wasm,
             {
-                "s4_sys_get_pkt_len" => get_pkt_len,
-                "s4_sys_read_pkt" => read_pkt,
+                "s4_sys_get_pkt_len" => pkt_get_len,
+                "s4_sys_read_pkt" => pkt_read,
                 "s4_sys_extract_hdr" => extract_hdr,
             }
         );
