@@ -24,7 +24,7 @@ pub extern "C" fn start_tx(tx_args_ptr: *mut c_void) -> i32 {
     loop {
         let pipeline_result_dequeue_count = tx_args.ring.dequeue_burst::<PipelineResult>(&pipeline_result_list, tx_args.batch_count);
         for i in 0..pipeline_result_dequeue_count {
-            let PipelineResult { owner_ring: _, rx_result, tx_conf } = pipeline_result_list.get(i);
+            let PipelineResult { owner_ring: _, rx_result, } = pipeline_result_list.get(i);
             let rx_result = unsafe { &mut **rx_result };
 
             tx_args.interface.tx(&mut rx_result.pktbuf);

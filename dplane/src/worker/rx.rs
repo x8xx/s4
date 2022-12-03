@@ -10,6 +10,7 @@ use crate::core::network::interface::Interface;
 use crate::parser::header::Header;
 use crate::parser::parser::Parser;
 use crate::parser::parse_result::ParseResult;
+use crate::parser::parse_result::Metadata;
 use crate::cache::cache::CacheElement;
 use crate::cache::cache::CacheData;
 use crate::cache::hash::l1_hash_function_murmurhash3;
@@ -46,6 +47,7 @@ pub struct RxResult {
     pub id: usize,
     pub pktbuf: PktBuf,
     pub raw_pkt: *mut u8,
+    pub pkt_len: usize,
     pub parse_result: ParseResult,
     pub cache_data: CacheData,
 
@@ -92,7 +94,9 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
         for (_, rx_result) in rx_result_array.as_slice().iter_mut().enumerate() {
             rx_result.id = rx_args.id;
             rx_result.owner_ring = &mut rx_result_ring_buf as *mut RingBuf<RxResult>;
-            rx_result.parse_result.metadata.port = rx_args.id as u8 + 1;
+
+            rx_result.parse_result.metadata = Array::new(1);
+            rx_result.parse_result.metadata[Metadata::InPort as usize] = rx_args.id as u32 + 1;
             rx_result.parse_result.header_list = Array::new(rx_args.header_list.len());
         }
         free_ringbuf_all_element!(rx_result_ring_buf, rx_result_array);
