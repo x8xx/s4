@@ -4,6 +4,7 @@ mod table_controller;
 mod cache_controller;
 
 use std::thread;
+use std::sync::Arc;
 use std::sync::RwLock;
 use std::net::TcpListener;
 use std::ffi::c_void;
@@ -16,6 +17,7 @@ use crate::core::thread::thread::spawn;
 use crate::parser::header;
 use crate::parser::parser;
 use crate::cache::cache::CacheElement;
+use crate::cache::tss::L3Cache;
 use crate::cache::tss::TupleSpace;
 use crate::pipeline::pipeline::Pipeline;
 use crate::pipeline::table::Table;
@@ -68,9 +70,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let mut l1_cache_list = Array::<Array<RwLock<CacheElement>>>::new(interface_configs_len);
     let mut lbf_list = Array::<Array<u64>>::new(interface_configs_len);
     let mut l2_cache_list = Array::<Array<Array<RwLock<CacheElement>>>>::new(interface_configs_len);
-    // let mut l3_cache_list = Array::<TupleSpace>::new(interface_configs_len);
     let mut l3_cache = TupleSpace::new(10000);
-
 
 
     let rx_batch_count = 64;
@@ -155,6 +155,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
                 header_max_size,
                 l2_cache: l2_cache_list[i][j].clone(),
                 l3_cache: &l3_cache,
+                // l3_cache,
                 pipeline_ring_list: pipeline_ring_from_cache_list.clone(),
             });
             cache_args_count += 1;
@@ -223,13 +224,15 @@ pub fn start_controller(switch_config: &SwitchConfig) {
 
     // run cache crater thread
     let cache_creater_ring_for_main_core = cache_creater_ring.clone();
+    let l3_cache_clone = L3Cache { l3_cache: &l3_cache as *const TupleSpace as *mut TupleSpace};
     let table_list_clone = table_list.clone();
     thread::spawn(move || {
         cache_controller::create_new_cache(cache_creater_ring_for_main_core,
                                            table_list_clone,
                                            l1_cache_list.clone(),
                                            lbf_list.clone(),
-                                           l2_cache_list.clone());
+                                           l2_cache_list.clone(),
+                                           l3_cache_clone);
     });
 
 

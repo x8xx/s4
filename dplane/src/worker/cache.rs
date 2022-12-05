@@ -1,5 +1,6 @@
 use std::ffi::c_void;
 use std::mem::transmute;
+use std::sync::Arc;
 use std::sync::RwLock;
 use crate::core::memory::ring::Ring;
 use crate::core::memory::ring::RingBuf;
@@ -25,6 +26,7 @@ pub struct CacheArgs<'a> {
     // cache
     pub l2_cache: Array<RwLock<CacheElement>>,
     pub l3_cache: &'a TupleSpace<'a>,
+    // pub l3_cache: Arc<TupleSpace<'a>>,
 
     // ring list
     pub pipeline_ring_list: Array<Ring>,
@@ -104,14 +106,14 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
 
 
             // l3 cache (tss)
-            // let cache_data = cache_args.l3_cache.search(rx_result.raw_pkt, &mut tss_key_store);
-            // match cache_data {
-            //     Some(cache_data) => {
-            //         cache_result.cache_data = cache_data;
-            //         cache_result.is_cache_hit = true;
-            //     },
-            //     None => {},
-            // }
+            let cache_data = cache_args.l3_cache.search(rx_result.raw_pkt, &mut tss_key_store);
+            match cache_data {
+                Some(cache_data) => {
+                    cache_result.cache_data = cache_data;
+                    cache_result.is_cache_hit = true;
+                },
+                None => {},
+            }
 
             cache_args.pipeline_ring_list[next_pipeline_core].enqueue(cache_result);
             next_pipeline_core = next_core(next_pipeline_core, cache_args.pipeline_ring_list.len());

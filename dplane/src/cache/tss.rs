@@ -1,19 +1,33 @@
+use std::sync::RwLock;
 use crate::core::memory::array::Array;
 use crate::parser::header::Field;
 use crate::cache::cache::CacheData;
 use crate::cache::cache::CacheElement;
 use crate::cache::hash::l3_hash_function_murmurhash3;
 
+pub struct L3Cache<'a> {
+    pub l3_cache: *mut TupleSpace<'a>,
+}
+unsafe impl<'a> Send for L3Cache<'a> {}
+unsafe impl<'a> Sync for L3Cache<'a> {}
+
+
+pub type TupleField = (MatchKind, Field);
+
+pub enum MatchKind {
+    Lpm,
+    Exact(Array<u8>, Array<u8>),
+}
 
 pub struct TupleSpace<'a> {
-    tuple_list: Array<(Tuple, Array<CacheElement>)>,
+    tuple_list: Array<Tuple>,
     tuple_len: usize,
     tuple_hash_table: Array<&'a Tuple>,
 }
 
 pub struct Tuple {
-    fields: Array<Field>,
-    values: Array<Value>,
+    fields: Array<TupleField>,
+    cache: Array<RwLock<CacheElement>>,
     hash: u16,
     seed: u32,
 }
@@ -40,13 +54,13 @@ impl<'a> TupleSpace<'a> {
 
     pub fn search(&self, pkt: *const u8, key_store: &mut KeyStore) -> Option<CacheData> {
         for i in 0..self.tuple_len {
-            let hash = self.tuple_list[i].0.hash_function(pkt, key_store);
+            let hash = self.tuple_list[i].hash_function(pkt, key_store);
             match hash {
                 Some(hash) => {
-                    if self.tuple_list[i].1[hash as usize].cmp_ptr_key(key_store.key.as_ptr(), key_store.key_len as isize) {
-                        return Some(self.tuple_list[i].1[hash as usize].data.clone());
+                    let cache = self.tuple_list[i].cache[hash as usize].read().unwrap();
+                    if cache.cmp_ptr_key(key_store.key.as_ptr(), key_store.key_len as isize) {
+                        return Some(cache.data.clone());
                     }
-
                 },
                 None => {},
             }
@@ -61,18 +75,33 @@ impl<'a> TupleSpace<'a> {
 
 
 impl Tuple {
-    // pub fn new() -> Self {
+    pub fn new(fields: Array<TupleField>, cache_len: usize, seed: u32) -> Self {
+        Tuple {
+            fields,
+            cache: Array::new(cache_len),
+            seed,
+        }
+    }
 
-    // }
 
     pub fn hash_function(&self, pkt: *const u8, key_store: &mut KeyStore) -> Option<u16> {
         let mut key_next_offset = 0;
         for i in 0..self.fields.len() {
-            key_next_offset += unsafe {
-                if self.fields[i].cmp_pkt(pkt, 0, &self.values[i].value, self.values[i].prefix_mask) {
-                    self.fields[i].copy_ptr_value(0, pkt as *mut u8, key_store.key.as_ptr().offset(key_next_offset))
-                } else {
-                    return None;
+            let (kind, field) = &self.fields[i];
+            match kind {
+                MatchKind::Lpm => {
+                    key_next_offset += unsafe {
+                        field.copy_ptr_value(0, pkt as *mut u8, key_store.key.as_ptr().offset(key_next_offset))
+                    };
+                },
+                MatchKind::Exact(start, end) => {
+                    key_next_offset += unsafe {
+                        if field.cmp_pkt_ge_value(pkt, 0, &start, 0xff) && field.cmp_pkt_le_value(pkt, 0, &end, 0xff) {
+                            field.copy_ptr_value(0, pkt as *mut u8, key_store.key.as_ptr().offset(key_next_offset))
+                        } else {
+                            return None;
+                        }
+                    };
                 }
             };
         }
@@ -81,13 +110,6 @@ impl Tuple {
         Some(l3_hash_function_murmurhash3(key_store.key.as_ptr(), key_store.key_len, self.seed))
     }
 }
-
-
-// impl Value {
-//     pub fn new() {
-
-//     }
-// }
 
 
 #[cfg(test)]

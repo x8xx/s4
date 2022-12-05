@@ -1,7 +1,10 @@
+use std::sync::Arc;
 use std::sync::RwLock;
 use crate::core::memory::array::Array;
 use crate::core::memory::ring::Ring;
 use crate::cache::cache::CacheElement;
+use crate::cache::tss::L3Cache;
+use crate::cache::tss::TupleSpace;
 // use crate::cache::cache::CacheData;
 use crate::pipeline::table::Table;
 use crate::worker::pipeline::NewCacheElement;
@@ -11,7 +14,8 @@ pub fn create_new_cache(ring: Ring,
                         table_list: Array<RwLock<Table>>,
                         l1_cache_list: Array<Array<RwLock<CacheElement>>>,
                         lbf_list: Array<Array<u64>>,
-                        l2_cache_list: Array<Array<Array<RwLock<CacheElement>>>>) {
+                        l2_cache_list: Array<Array<Array<RwLock<CacheElement>>>>,
+                        l3_cache: L3Cache) {
     let new_cache_list = Array::<&mut NewCacheElement>::new(32);
     loop {
         let new_cache_dequeue_count = ring.dequeue_burst::<NewCacheElement>(&new_cache_list, 32);
@@ -38,10 +42,14 @@ pub fn create_new_cache(ring: Ring,
                 new_cache.cache_data.deepcopy(&mut l2_cache.data);
             }
 
-            // println!("check 22");
+            // L3 Cache
+            {
+
+            }
+
+
             hash_calc_result.free();
             new_cache.free();
-            // println!("check 23");
         }
     }
 }

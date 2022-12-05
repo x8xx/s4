@@ -141,6 +141,163 @@ impl Field {
     }
 
 
+    // pub fn is_value_in_range(&self, pkt: *const u8, hdr_offset: u16, start: Array<u8>, end: Array<u8>) -> bool {
+    //     if self.start_byte_pos == self.end_byte_pos {
+    //         let pkt_first_value = unsafe {
+    //             *(pkt.offset((self.start_byte_pos + hdr_offset as usize) as isize)) & self.start_bit_mask
+    //         };
+
+    //         if start[0] <= pkt_first_value && pkt_first_value <= end[0] {
+    //             return true;
+    //         }
+    //         return false;
+    //     }
+
+
+    //     let start_check = false;
+    //     let end_check = false;
+    //     for i in 0..(start.len()-1) {
+    //         let pkt_value = unsafe {
+    //             *(pkt.offset((self.start_byte_pos + i + hdr_offset as usize) as isize))
+    //         };
+
+    //         if start[i] > pkt_value {
+    //             return false;
+    //         }
+
+    //         if end[i] < pkt_value {
+    //             return false;
+    //         }
+
+    //         if start[i] < pkt_value && end[i] > pkt_value {
+    //             return true;
+    //         } else if start[i] < pkt_value {
+    //         }
+
+
+
+    //         // if start[i] <= pkt_value && pkt_value <= end[i] {
+    //         //     return true;
+    //         // }
+    //     }
+
+
+    //     // end
+    //     let pkt_end_value = if (value.len() - 1) == (self.end_byte_pos - self.start_byte_pos) {
+    //         unsafe {
+    //             *(pkt.offset((self.end_byte_pos + hdr_offset as usize) as isize)) & end_bit_mask
+    //         }
+    //     } else {
+    //         unsafe {
+    //             *(pkt.offset((self.start_byte_pos + (value.len() - 1) + hdr_offset as usize) as isize)) & end_bit_mask
+    //         }
+    //     };
+
+    //     if pkt_end_value != value[value.len() - 1] & end_bit_mask {
+    //         return false;
+    //     }
+
+    //     false
+    // }
+
+    /**
+     * pkt >= value
+     */
+    pub fn cmp_pkt_ge_value(&self, pkt: *const u8, hdr_offset: u16, value: &Array<u8>, end_bit_mask: u8) -> bool {
+        // start
+        if self.start_byte_pos == self.end_byte_pos {
+            let pkt_first_value = unsafe {
+                *(pkt.offset((self.start_byte_pos + hdr_offset as usize) as isize)) & self.start_bit_mask
+            };
+
+            if pkt_first_value >= value[0] {
+                return true;
+            }
+            return false;
+
+        }
+
+        for i in 0..(value.len()-1) {
+            let pkt_value = unsafe {
+                *(pkt.offset((self.start_byte_pos + i + hdr_offset as usize) as isize))
+            };
+
+            if pkt_value > value[i] {
+                return true;
+            } else if pkt_value < value[i] {
+                return false;
+            }
+        }
+
+
+        // end
+        let pkt_end_value = if (value.len() - 1) == (self.end_byte_pos - self.start_byte_pos) {
+            unsafe {
+                *(pkt.offset((self.end_byte_pos + hdr_offset as usize) as isize)) & end_bit_mask
+            }
+        } else {
+            unsafe {
+                *(pkt.offset((self.start_byte_pos + (value.len() - 1) + hdr_offset as usize) as isize)) & end_bit_mask
+            }
+        };
+
+        if pkt_end_value >= (value[value.len() - 1] & end_bit_mask) {
+            return true;
+        }
+
+        false
+    }
+
+
+    /**
+     * pkt <= value
+     */
+    pub fn cmp_pkt_le_value(&self, pkt: *const u8, hdr_offset: u16, value: &Array<u8>, end_bit_mask: u8) -> bool {
+        // start
+        if self.start_byte_pos == self.end_byte_pos {
+            let pkt_first_value = unsafe {
+                *(pkt.offset((self.start_byte_pos + hdr_offset as usize) as isize)) & self.start_bit_mask
+            };
+
+            if pkt_first_value <= value[0] {
+                return true;
+            }
+            return false;
+
+        }
+
+        for i in 0..(value.len()-1) {
+            let pkt_value = unsafe {
+                *(pkt.offset((self.start_byte_pos + i + hdr_offset as usize) as isize))
+            };
+
+            if pkt_value < value[i] {
+                return true;
+            } else if pkt_value > value[i] {
+                return false;
+            }
+        }
+
+
+        // end
+        let pkt_end_value = if (value.len() - 1) == (self.end_byte_pos - self.start_byte_pos) {
+            unsafe {
+                *(pkt.offset((self.end_byte_pos + hdr_offset as usize) as isize)) & end_bit_mask
+            }
+        } else {
+            unsafe {
+                *(pkt.offset((self.start_byte_pos + (value.len() - 1) + hdr_offset as usize) as isize)) & end_bit_mask
+            }
+        };
+
+        if pkt_end_value <= (value[value.len() - 1] & end_bit_mask) {
+            return true;
+        }
+
+        false
+    }
+
+
     pub fn cmp_pkt(&self, pkt: *const u8, hdr_offset: u16, value: &Array<u8>, end_bit_mask: u8) -> bool {
         // start
         if self.start_byte_pos == self.end_byte_pos {
@@ -403,5 +560,107 @@ mod tests {
         value[0] = 64;
         assert!(field.cmp_pkt(pkt.as_ptr(), 8, &value, 0xC0));
         value.free();
+    }
+
+
+    #[test]
+    fn test_cmp_pkt_ge_value() {
+        let mut pkt = Array::<u8>::new(10);
+        pkt[0] = 10;
+        pkt[1] = 20;
+        pkt[2] = 30;
+
+
+        let mut field = Field {
+            start_byte_pos: 0,
+            start_bit_mask: 0xff,
+            end_byte_pos: 2,
+            end_bit_mask: 0xff,
+        }; 
+        let mut value = Array::<u8>::new(3);
+        value[0] = 10;
+        value[1] = 20;
+        value[2] = 30;
+        assert!(field.cmp_pkt_ge_value(pkt.as_ptr(), 0, &value, 0xff));
+
+        value[0] = 10;
+        value[1] = 20;
+        value[2] = 31;
+        assert!(!field.cmp_pkt_ge_value(pkt.as_ptr(), 0, &value, 0xff));
+
+        value[0] = 10;
+        value[1] = 20;
+        value[2] = 29;
+        assert!(field.cmp_pkt_ge_value(pkt.as_ptr(), 0, &value, 0xff));
+
+        value[0] = 20;
+        value[1] = 20;
+        value[2] = 30;
+        assert!(!field.cmp_pkt_ge_value(pkt.as_ptr(), 0, &value, 0xff));
+
+        pkt[0] = 0;
+        pkt[1] = 0;
+        pkt[2] = 30;
+
+        value[0] = 0;
+        value[1] = 0;
+        value[2] = 30;
+        assert!(field.cmp_pkt_ge_value(pkt.as_ptr(), 0, &value, 0xff));
+
+        value[0] = 0;
+        value[1] = 0;
+        value[2] = 29;
+        assert!(field.cmp_pkt_ge_value(pkt.as_ptr(), 0, &value, 0xff));
+    }
+
+
+    #[test]
+    fn test_cmp_pkt_le_value() {
+        let mut pkt = Array::<u8>::new(10);
+        pkt[0] = 10;
+        pkt[1] = 20;
+        pkt[2] = 30;
+
+
+        let mut field = Field {
+            start_byte_pos: 0,
+            start_bit_mask: 0xff,
+            end_byte_pos: 2,
+            end_bit_mask: 0xff,
+        }; 
+        let mut value = Array::<u8>::new(3);
+        value[0] = 10;
+        value[1] = 20;
+        value[2] = 30;
+        assert!(field.cmp_pkt_le_value(pkt.as_ptr(), 0, &value, 0xff));
+
+        value[0] = 10;
+        value[1] = 20;
+        value[2] = 31;
+        assert!(field.cmp_pkt_le_value(pkt.as_ptr(), 0, &value, 0xff));
+
+        value[0] = 10;
+        value[1] = 20;
+        value[2] = 29;
+        assert!(!field.cmp_pkt_le_value(pkt.as_ptr(), 0, &value, 0xff));
+
+        value[0] = 20;
+        value[1] = 20;
+        value[2] = 30;
+        assert!(field.cmp_pkt_le_value(pkt.as_ptr(), 0, &value, 0xff));
+
+        pkt[0] = 0;
+        pkt[1] = 0;
+        pkt[2] = 30;
+
+        value[0] = 0;
+        value[1] = 0;
+        value[2] = 30;
+        assert!(field.cmp_pkt_le_value(pkt.as_ptr(), 0, &value, 0xff));
+
+        value[0] = 0;
+        value[1] = 0;
+        value[2] = 29;
+        assert!(!field.cmp_pkt_le_value(pkt.as_ptr(), 0, &value, 0xff));
     }
 }

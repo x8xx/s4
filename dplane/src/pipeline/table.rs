@@ -340,12 +340,11 @@ mod tests {
 
 
         let mut parse_result = parse_result::ParseResult {
-            metadata: parse_result::Metadata {
-                port: 0,
-            },
+            metadata: Array::new(1),
             hdr_size: 0,
             header_list: Array::new(4),
         };
+        parse_result.metadata.init(0, 0);
         parse_result.header_list.init(0, parse_result::Header {
             is_valid: true,
             offset: 0,
