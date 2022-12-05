@@ -22,6 +22,7 @@ impl Interface {
                 dpdk_sys::rte_socket_id().try_into().unwrap()
             )
         };
+        println!("{} port {}", name, port_number);
         Interface::up(port_number, mempool);
 
         Interface {
@@ -101,6 +102,7 @@ impl Interface {
     }
 
     pub fn rx(&self, pktbuf: &mut pktbuf::PktBuf, len: u16) -> u16 {
+        // println!("rx port {}", self.port_number);
         unsafe {
             dpdk_sys::rte_eth_rx_burst(
                 self.port_number,
@@ -112,6 +114,7 @@ impl Interface {
     }
 
     pub fn tx(&self, pktbuf: &mut pktbuf::PktBuf, len: u16) -> u16 {
+        // println!("tx port {}", self.port_number);
         unsafe {
             dpdk_sys::rte_eth_tx_burst(
                 self.port_number,

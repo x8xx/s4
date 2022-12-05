@@ -38,8 +38,12 @@ fn main() {
         execution_time,
     };
 
+    let tx_ring = dpdk::memory::Ring::new(8192);
     let tx_args = tx::TxArgs {
-        tap_name: tap_name.clone(),
+        // tap_name: tap_name.clone(),
+        pkt_batch_count: 256,
+        batch_count: 32,
+        ring: tx_ring.clone(),
         interface: interface.clone(),
         execution_time,
         rx_args: &rx_args as *const rx::RxArgs as *mut c_void,
@@ -47,7 +51,9 @@ fn main() {
 
     let gen_args = gen::GenArgs {
         tap_name: tap_name.clone(),
+        batch_count: 256,
         execution_time,
+        tx_ring: tx_ring.clone(),
         tx_args: &tx_args as *const tx::TxArgs as *mut c_void,
         gen_lib_path: gen_lib_path.to_string(),
     };
