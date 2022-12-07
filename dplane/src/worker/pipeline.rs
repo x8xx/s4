@@ -1,5 +1,6 @@
 use std::ffi::c_void;
 use std::mem::transmute;
+use crate::core::memory::heap::Heap;
 use crate::core::memory::array::Array;
 use crate::core::memory::ring::Ring;
 use crate::core::memory::ring::RingBuf;
@@ -96,13 +97,16 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
     //     owner_ring => &mut pipeline_result_ringbuf as *mut RingBuf<PipelineResult>,
     // });
 
+    let mut heap = Heap::new(pipeline_args.buf_size * (pipeline_args.header_max_size + pipeline_args.table_list_len));
 
     // init ringbuf (new cache)
     let mut new_cache_element_ringbuf = RingBuf::<NewCacheElement>::new(pipeline_args.buf_size);
     init_ringbuf_element!(new_cache_element_ringbuf, NewCacheElement, {
         owner_ring => &mut new_cache_element_ringbuf as *mut RingBuf<NewCacheElement>,
-        l1_key => Array::new(pipeline_args.header_max_size),
-        cache_data => Array::new(pipeline_args.table_list_len),
+        // l1_key => Array::new(pipeline_args.header_max_size),
+        // cache_data => Array::new(pipeline_args.table_list_len),
+        l1_key => heap.malloc(pipeline_args.header_max_size),
+        cache_data => heap.malloc(pipeline_args.table_list_len),
     });
 
 

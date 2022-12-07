@@ -4,6 +4,7 @@ use std::sync::RwLock;
 use crate::core::memory::ring::Ring;
 use crate::core::memory::ring::RingBuf;
 use crate::core::memory::ring::{init_ringbuf_element, malloc_ringbuf_all_element, free_ringbuf_all_element};
+use crate::core::memory::heap::Heap;
 use crate::core::memory::array::Array;
 use crate::core::network::pktbuf::PktBuf;
 use crate::core::network::interface::Interface;
@@ -89,7 +90,10 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     let rx_args = unsafe { &mut *transmute::<*mut c_void, *mut RxArgs>(rx_args_ptr) };
     println!("Init Rx{} Core", rx_args.id);
 
+    let mut heap = Heap::new(rx_args.pktbuf_size * (1 + rx_args.header_list.len() + rx_args.l2_key_max_len as usize));
+
     // init ringbuf
+    println!("debug rx init");
     let mut rx_result_ring_buf = RingBuf::<RxResult>::new(rx_args.pktbuf_size);
     {
         let rx_result_array = malloc_ringbuf_all_element!(rx_result_ring_buf, RxResult);
@@ -97,19 +101,22 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             rx_result.id = rx_args.id;
             rx_result.owner_ring = &mut rx_result_ring_buf as *mut RingBuf<RxResult>;
 
-            rx_result.parse_result.metadata = Array::new(1);
+            // rx_result.parse_result.metadata = Array::new(1);
+            rx_result.parse_result.metadata = heap.malloc(1); 
             rx_result.parse_result.metadata[Metadata::InPort as usize] = rx_args.id as u32 + 1;
-            rx_result.parse_result.header_list = Array::new(rx_args.header_list.len());
+            // rx_result.parse_result.header_list = Array::new(rx_args.header_list.len());
+            rx_result.parse_result.header_list = heap.malloc(rx_args.header_list.len());
         }
         free_ringbuf_all_element!(rx_result_ring_buf, rx_result_array);
     }
+    println!("debug rx init end");
 
 
     // init hash_calc_result
     let mut hash_calc_result_ring_buf = RingBuf::<HashCalcResult>::new(rx_args.pktbuf_size);
     init_ringbuf_element!(hash_calc_result_ring_buf, HashCalcResult, {
         owner_ring => &mut hash_calc_result_ring_buf as *mut RingBuf<HashCalcResult>,
-        l2_key => Array::new(rx_args.l2_key_max_len as usize),
+        l2_key => heap.malloc(rx_args.l2_key_max_len as usize),
     });
 
 
