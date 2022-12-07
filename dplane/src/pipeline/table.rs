@@ -15,12 +15,12 @@ pub enum MatchKind {
 }
 
 pub struct Table {
-    entries: Array<FlowEntry>,
-    keys: Array<(MatchField, MatchKind)>,
+    pub entries: Array<FlowEntry>,
+    pub keys: Array<(MatchField, MatchKind)>,
     // default_action: ActionSet,
-    default_entry: FlowEntry,
-    len: usize,
-    header_list: Array<Header>,
+    pub default_entry: FlowEntry,
+    pub len: usize,
+    pub header_list: Array<Header>,
 }
 
 pub struct FlowEntry {
@@ -131,7 +131,7 @@ impl Table {
 
                 // any check
                 let value = match &self.entries[i].values[j].value {
-                    Some(value) => (value),
+                    Some(value) => value,
                     // any
                     None => {
                         if let MatchKind::Lpm = match_kind {

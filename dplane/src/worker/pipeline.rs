@@ -4,6 +4,8 @@ use crate::core::memory::array::Array;
 use crate::core::memory::ring::Ring;
 use crate::core::memory::ring::RingBuf;
 use crate::core::memory::ring::init_ringbuf_element;
+use crate::core::network::pktbuf::PktBuf;
+use crate::parser::parse_result::ParseResult;
 use crate::cache::cache::CacheData;
 use crate::pipeline::pipeline::Pipeline;
 use crate::pipeline::output::Output;
@@ -29,20 +31,19 @@ pub struct PipelineArgs {
 }
 
 
-pub struct PipelineResult {
-    pub owner_ring: *mut RingBuf<PipelineResult>,
-    pub rx_result: *mut RxResult,
-}
+// pub struct PipelineResult {
+//     pub owner_ring: *mut RingBuf<PipelineResult>,
+//     pub rx_result: *mut RxResult,
+// }
 
 
-impl PipelineResult {
-    pub fn free(&mut self) {
-        unsafe {
-            (*self.owner_ring).free(self);
-        }
-    }
-}
-
+// impl PipelineResult {
+//     pub fn free(&mut self) {
+//         unsafe {
+//             (*self.owner_ring).free(self);
+//         }
+//     }
+// }
 
 
 pub struct NewCacheElement {
@@ -52,6 +53,7 @@ pub struct NewCacheElement {
     pub l1_key_len: usize,
     pub cache_id: usize,
     pub cache_data: CacheData,
+    pub parse_result: *mut ParseResult,
     pub hash_calc_result: *mut HashCalcResult
 }
 
@@ -64,16 +66,16 @@ impl NewCacheElement {
 }
 
 
-pub fn output_pkt(tx_ring_list: &Array<Ring>, pipeline_result: &mut PipelineResult, output: Output) -> bool {
+pub fn output_pkt(tx_ring_list: &Array<Ring>, pktbuf: &mut PktBuf, output: Output) -> bool {
     match output {
         Output::Port(port_num) => {
-            tx_ring_list[port_num as usize].enqueue(pipeline_result);
+            tx_ring_list[port_num as usize].enqueue(pktbuf);
         },
         Output::All => {
             // TODO
         },
         Output::Controller => {
-            tx_ring_list[0].enqueue(pipeline_result);
+            tx_ring_list[0].enqueue(pktbuf);
         },
         Output::Drop => {
             return false;
@@ -89,10 +91,10 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
 
 
     // init ringbuf (pipeline result)
-    let mut pipeline_result_ringbuf = RingBuf::<PipelineResult>::new(pipeline_args.buf_size);
-    init_ringbuf_element!(pipeline_result_ringbuf, PipelineResult, {
-        owner_ring => &mut pipeline_result_ringbuf as *mut RingBuf<PipelineResult>,
-    });
+    // let mut pipeline_result_ringbuf = RingBuf::<PipelineResult>::new(pipeline_args.buf_size);
+    // init_ringbuf_element!(pipeline_result_ringbuf, PipelineResult, {
+    //     owner_ring => &mut pipeline_result_ringbuf as *mut RingBuf<PipelineResult>,
+    // });
 
 
     // init ringbuf (new cache)
@@ -113,10 +115,10 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
         let rx_result_dequeue_count = pipeline_args.ring_from_rx.dequeue_burst::<RxResult>(&rx_result_list, pipeline_args.batch_count);
         for i in 0..rx_result_dequeue_count {
             let rx_result = rx_result_list.get(i);
-            println!("pipeline malloc");
-            let mut pipeline_result = pipeline_result_ringbuf.malloc();
-            println!("pipeline malloc ok");
-            pipeline_result.rx_result = *rx_result as *mut RxResult;
+            // println!("pipeline malloc");
+            // let mut pipeline_result = pipeline_result_ringbuf.malloc();
+            // println!("pipeline malloc ok");
+            // pipeline_result.rx_result = *rx_result as *mut RxResult;
 
             let RxResult {
                 owner_ring: _,
@@ -132,20 +134,22 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
             let mut output = Output::Drop;
             pipeline_args.pipeline.run_cache_pipeline(rx_result_list.get(i).raw_pkt, *pkt_len,  parse_result, cache_data, &mut output);
 
-           if !output_pkt(&pipeline_args.tx_ring_list, &mut pipeline_result, output) {
+           if !output_pkt(&pipeline_args.tx_ring_list, pktbuf, output) {
                 rx_result_list.get(i).free();
                 pktbuf.free();
                 continue;
            } 
+
+           rx_result_list.get(i).free();
         }
 
 
         // // from cache
         let cache_result_dequeue_count = pipeline_args.ring_from_cache.dequeue_burst::<CacheResult>(&cache_result_list, pipeline_args.batch_count);
         for i in 0..cache_result_dequeue_count {
-            println!("pipeline malloc");
-            let mut pipeline_result = pipeline_result_ringbuf.malloc();
-            println!("pipeline malloc ok");
+            // println!("pipeline malloc");
+            // let mut pipeline_result = pipeline_result_ringbuf.malloc();
+            // println!("pipeline malloc ok");
 
             let CacheResult {
                 owner_ring: _,
@@ -155,7 +159,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 cache_data: ref cache_data, 
             } = cache_result_list.get(i);
 
-            pipeline_result.rx_result = *rx_result;
+            // pipeline_result.rx_result = *rx_result;
 
             let RxResult {
                 owner_ring: _,
@@ -198,13 +202,14 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
             }
 
 
-           if !output_pkt(&pipeline_args.tx_ring_list, &mut pipeline_result, output) {
-                rx_result_list.get(i).free();
-                pktbuf.free();
-                continue;
+           if !output_pkt(&pipeline_args.tx_ring_list, pktbuf, output) {
+               println!("drop");
+               rx_result_list.get(i).free();
+               pktbuf.free();
+               continue;
            } 
-            // println!("output port {}", pipeline_result.tx_conf.output_port);
-            // pipeline_args.tx_ring_list[pipeline_result.tx_conf.output_port].enqueue(pipeline_result);
+
+           rx_result_list.get(i).free();
         }
 
         if false {

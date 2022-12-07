@@ -49,11 +49,13 @@ pub fn start_controller(switch_config: &SwitchConfig) {
 
     // initial flowentry
     // entry_count(4byte) | (table_id(1byte) | entry_buf_size(2byte) | entry)*
+    println!("init flow entry");
     let initial_table_data = &switch_config.initial_table_data;
     if initial_table_data.len() != 0 {
         let entry_count: u32 = ((initial_table_data[3] as u32) << 24) + ((initial_table_data[2] as u32) << 16) + ((initial_table_data[1] as u32) << 8) + initial_table_data[0] as u32;
         let mut pos = 4;
-        for _ in 0..entry_count as usize {
+        for i in 0..entry_count as usize {
+
             let table_id = initial_table_data[pos];
             pos += 1;
             let entry_buf_size = ((initial_table_data[pos + 1] as u16) << 8) + initial_table_data[pos] as u16;
@@ -62,6 +64,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             pos += entry_buf_size as usize;
         }
     }
+    println!("init flow entry done!");
 
 
     let interface_configs_len = switch_config.interface_configs.len();
@@ -70,7 +73,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let mut l1_cache_list = Array::<Array<RwLock<CacheElement>>>::new(interface_configs_len);
     let mut lbf_list = Array::<Array<u64>>::new(interface_configs_len);
     let mut l2_cache_list = Array::<Array<Array<RwLock<CacheElement>>>>::new(interface_configs_len);
-    let mut l3_cache = TupleSpace::new(10000);
+    let mut l3_cache = TupleSpace::new(10000, 417);
 
 
     let rx_batch_count = 64;
@@ -78,11 +81,16 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let pipeline_batch_count = 64;
     let tx_batch_count = 64;
 
-    let rx_buf_size = 8192;
-    let cache_buf_size = 8192;
-    let pipeline_buf_size = 8192;
-    let tx_buf_size = 8192;
-    let cache_creater_buf_size = 8192;
+    // let rx_buf_size = 8192;
+    // let cache_buf_size = 8192;
+    // let pipeline_buf_size = 8192;
+    // let tx_buf_size = 8192;
+    // let cache_creater_buf_size = 4096;
+    let rx_buf_size = 1024;
+    let cache_buf_size = 1024;
+    let pipeline_buf_size = 1024;
+    let tx_buf_size = 1024;
+    let cache_creater_buf_size = 1024;
 
 
     // to main core ring 
@@ -198,6 +206,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             interface: interface.clone(),
             ring: tx_ring_list[i + 1].clone(),
             batch_count: tx_batch_count,
+            pkt_tx_batch_count: 64,
         });
     }
 
@@ -228,6 +237,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let table_list_clone = table_list.clone();
     thread::spawn(move || {
         cache_controller::create_new_cache(cache_creater_ring_for_main_core,
+                                           header_list.clone(),
                                            table_list_clone,
                                            l1_cache_list.clone(),
                                            lbf_list.clone(),

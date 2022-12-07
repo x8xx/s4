@@ -11,10 +11,10 @@ pub struct Header {
 
 #[derive(Clone, Copy)]
 pub struct Field {
-    start_byte_pos: usize,
-    start_bit_mask: u8,
-    end_byte_pos: usize,
-    end_bit_mask: u8,
+    pub start_byte_pos: usize,
+    pub start_bit_mask: u8,
+    pub end_byte_pos: usize,
+    pub end_bit_mask: u8,
 }
 
 
@@ -119,6 +119,11 @@ impl Field {
     }
 
 
+    pub fn get(&self) -> (usize, u8, usize, u8) {
+        (self.start_byte_pos, self.start_bit_mask, self.end_byte_pos, self.end_bit_mask)
+    }
+
+
     pub fn copy_ptr_value(&self, base_offset: isize, src: *mut u8, dst: *mut u8) -> isize {
         unsafe {
             if self.start_byte_pos == self.end_byte_pos {
@@ -140,65 +145,6 @@ impl Field {
         }
     }
 
-
-    // pub fn is_value_in_range(&self, pkt: *const u8, hdr_offset: u16, start: Array<u8>, end: Array<u8>) -> bool {
-    //     if self.start_byte_pos == self.end_byte_pos {
-    //         let pkt_first_value = unsafe {
-    //             *(pkt.offset((self.start_byte_pos + hdr_offset as usize) as isize)) & self.start_bit_mask
-    //         };
-
-    //         if start[0] <= pkt_first_value && pkt_first_value <= end[0] {
-    //             return true;
-    //         }
-    //         return false;
-    //     }
-
-
-    //     let start_check = false;
-    //     let end_check = false;
-    //     for i in 0..(start.len()-1) {
-    //         let pkt_value = unsafe {
-    //             *(pkt.offset((self.start_byte_pos + i + hdr_offset as usize) as isize))
-    //         };
-
-    //         if start[i] > pkt_value {
-    //             return false;
-    //         }
-
-    //         if end[i] < pkt_value {
-    //             return false;
-    //         }
-
-    //         if start[i] < pkt_value && end[i] > pkt_value {
-    //             return true;
-    //         } else if start[i] < pkt_value {
-    //         }
-
-
-
-    //         // if start[i] <= pkt_value && pkt_value <= end[i] {
-    //         //     return true;
-    //         // }
-    //     }
-
-
-    //     // end
-    //     let pkt_end_value = if (value.len() - 1) == (self.end_byte_pos - self.start_byte_pos) {
-    //         unsafe {
-    //             *(pkt.offset((self.end_byte_pos + hdr_offset as usize) as isize)) & end_bit_mask
-    //         }
-    //     } else {
-    //         unsafe {
-    //             *(pkt.offset((self.start_byte_pos + (value.len() - 1) + hdr_offset as usize) as isize)) & end_bit_mask
-    //         }
-    //     };
-
-    //     if pkt_end_value != value[value.len() - 1] & end_bit_mask {
-    //         return false;
-    //     }
-
-    //     false
-    // }
 
     /**
      * pkt >= value

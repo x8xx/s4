@@ -45,9 +45,11 @@ pub struct RxResult {
 
     // to cache and pipeline
     pub id: usize,
+
     pub pktbuf: PktBuf,
     pub raw_pkt: *mut u8,
     pub pkt_len: usize,
+
     pub parse_result: ParseResult,
     pub cache_data: CacheData,
 
@@ -133,6 +135,12 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 rx_result.free();
                 continue;
             }
+
+            // unsafe {
+            //     println!("{:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(0),*pkt.offset(1),*pkt.offset(2),*pkt.offset(3),*pkt.offset(4),*pkt.offset(5));
+            //     println!("{:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(6),*pkt.offset(7),*pkt.offset(8),*pkt.offset(9),*pkt.offset(10),*pkt.offset(11));
+            //     println!("{:x} {:x}", *pkt.offset(12),*pkt.offset(13));
+            // }
 
 
             rx_result.parse_result.hdr_size = 0;

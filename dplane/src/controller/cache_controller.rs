@@ -1,16 +1,21 @@
-use std::sync::Arc;
+use std::ptr::null;
 use std::sync::RwLock;
 use crate::core::memory::array::Array;
 use crate::core::memory::ring::Ring;
+use crate::parser::header::Header;
+use crate::parser::header::Field;
 use crate::cache::cache::CacheElement;
 use crate::cache::tss::L3Cache;
+use crate::cache::tss;
 use crate::cache::tss::TupleSpace;
 // use crate::cache::cache::CacheData;
+use crate::pipeline::table;
 use crate::pipeline::table::Table;
 use crate::worker::pipeline::NewCacheElement;
 
 
 pub fn create_new_cache(ring: Ring, 
+                        header_list: Array<Header>,
                         table_list: Array<RwLock<Table>>,
                         l1_cache_list: Array<Array<RwLock<CacheElement>>>,
                         lbf_list: Array<Array<u64>>,
@@ -33,6 +38,7 @@ pub fn create_new_cache(ring: Ring,
                 new_cache.cache_data.deepcopy(&mut l1_cache.data);
             }
 
+
             // L2 Cache
             {
                 let mut l2_cache = l2_cache_list[new_cache.rx_id][new_cache.cache_id][hash_calc_result.l2_hash as usize].write().unwrap();
@@ -42,10 +48,49 @@ pub fn create_new_cache(ring: Ring,
                 new_cache.cache_data.deepcopy(&mut l2_cache.data);
             }
 
-            // L3 Cache
-            {
 
-            }
+            // L3 Cache
+            // {
+            //     let parsed_header = unsafe { (*(new_cache.parse_result)).header_list };
+            //     let entries= new_cache.cache_data;
+            //     let tuple_fields = Vec::new();
+
+            //     // j = table_id
+            //     for j in 0..entries.len() {
+            //         // entry null check
+            //         let entry = unsafe { 
+            //             if entries[j] == null() {
+            //                 continue
+            //             }
+            //             &*entries[j]
+            //         };
+                    
+            //         let table = table_list[j].read().unwrap();
+                    
+            //         // k = entry_id
+            //         for k in 0..table.keys.len() {
+            //             // (table::MatchField(HeaderID, FieldID), MatchKind(Exact, Lpm))
+            //             let match_field = table.keys[k];
+
+            //             let field = header_list[table.keys[k].0.0 as usize].fields[table.keys[k].0.1 as usize].clone();
+            //             field.start_byte_pos += parsed_header[j].offset as usize;
+            //             field.end_byte_pos += parsed_header[j].offset as usize;
+
+            //             // value
+
+
+            //             match match_field.1 {
+            //                 table::MatchKind::Exact => {
+            //                     tuple_fields.push((tss::MatchKind::Exact(), field));
+            //                 },
+            //                 table::MatchKind::Lpm => {
+            //                     tuple_fields.push((tss::MatchKind::Lpm, field));
+            //                 },
+            //             }
+            //         }
+            //     }
+
+            // }
 
 
             hash_calc_result.free();

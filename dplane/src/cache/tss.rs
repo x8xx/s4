@@ -23,6 +23,7 @@ pub struct TupleSpace<'a> {
     tuple_list: Array<Tuple>,
     tuple_len: usize,
     tuple_hash_table: Array<&'a Tuple>,
+    tuple_hash_seed: u32,
 }
 
 pub struct Tuple {
@@ -44,11 +45,12 @@ pub struct KeyStore {
 
 
 impl<'a> TupleSpace<'a> {
-    pub fn new(len: usize) -> Self {
+    pub fn new(len: usize, tuple_hash_seed: u32) -> Self {
         TupleSpace {
             tuple_list: Array::new(len),
             tuple_len: 0,
             tuple_hash_table: Array::new(65535),
+            tuple_hash_seed,
         }
     }
 
@@ -76,9 +78,12 @@ impl<'a> TupleSpace<'a> {
 
 impl Tuple {
     pub fn new(fields: Array<TupleField>, cache_len: usize, seed: u32) -> Self {
+        let hash = Tuple::tuple_hash(&fields, seed);
+
         Tuple {
             fields,
             cache: Array::new(cache_len),
+            hash,
             seed,
         }
     }
@@ -108,6 +113,32 @@ impl Tuple {
         key_store.key_len = key_next_offset as usize;
 
         Some(l3_hash_function_murmurhash3(key_store.key.as_ptr(), key_store.key_len, self.seed))
+    }
+
+
+    pub fn tuple_hash(fields: &Array<TupleField>, seed: u32) -> u16 {
+        let mut tuple_key = Vec::new();
+        for i in 0..fields.len() {
+            let (kind, field) = &fields[i];
+            let (start_byte_pos, start_bit_mask, end_byte_pos, end_bit_mask) = field.get();
+            tuple_key.push(start_byte_pos as u8);
+            tuple_key.push(start_bit_mask);
+            tuple_key.push(end_byte_pos as u8);
+            tuple_key.push(end_bit_mask);
+
+            match kind {
+                MatchKind::Lpm => {},
+                MatchKind::Exact(start, end) => {
+                    for j in 0..start.len() {
+                        tuple_key.push(start[j]);
+                    }
+                    for j in 0..end.len() {
+                        tuple_key.push(end[j]);
+                    }
+                }
+            }
+        }
+        l3_hash_function_murmurhash3(tuple_key.as_ptr(), tuple_key.len(), seed)
     }
 }
 
