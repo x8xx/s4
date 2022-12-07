@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["prod"]
+default = ["prod", "logger-std", "log-level-debug"]
 # default = ["debug"]
 prod = ["dpdk", "runtime_wasm", "wasm_wasmer", "wasmer_llvm"]
 debug = ["linux", "runtime_wasm", "wasm_wasmer"]
@@ -14,6 +14,9 @@ linux = []
 runtime_wasm = []
 wasm_wasmer = []
 wasmer_llvm = ["dep:wasmer-compiler-llvm"]
+
+logger-std = []
+log-level-debug = []
 
 [dependencies]
 # dpdk feature only
