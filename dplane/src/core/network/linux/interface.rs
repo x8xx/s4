@@ -65,7 +65,8 @@ impl Interface {
         // }
     }
 
-    pub fn tx(&self, pktbuf: &mut pktbuf::PktBuf) {
+    pub fn tx(&self, pktbuf: &mut pktbuf::PktBuf, len: usize) -> u16 {
+        0
         // unsafe {
         //     // dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.pkt_count as u16);
         //     dpdk_sys::rte_eth_tx_burst(

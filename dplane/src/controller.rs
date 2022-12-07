@@ -52,15 +52,17 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     println!("init flow entry");
     let initial_table_data = &switch_config.initial_table_data;
     if initial_table_data.len() != 0 {
-        let entry_count: u32 = ((initial_table_data[3] as u32) << 24) + ((initial_table_data[2] as u32) << 16) + ((initial_table_data[1] as u32) << 8) + initial_table_data[0] as u32;
-        let mut pos = 4;
+        let entry_sum_size: u32 = ((initial_table_data[3] as u32) << 24) + ((initial_table_data[2] as u32) << 16) + ((initial_table_data[1] as u32) << 8) + initial_table_data[0] as u32;
+        let mut flow_entry_heap = Heap::new(entry_sum_size as usize);
+        let entry_count: u32 = ((initial_table_data[7] as u32) << 24) + ((initial_table_data[6] as u32) << 16) + ((initial_table_data[5] as u32) << 8) + initial_table_data[4] as u32;
+        let mut pos = 8;
         for i in 0..entry_count as usize {
 
             let table_id = initial_table_data[pos];
             pos += 1;
             let entry_buf_size = ((initial_table_data[pos + 1] as u16) << 8) + initial_table_data[pos] as u16;
             pos += 2;
-            table_controller::add_flow_entry(&mut table_list[table_id as usize], &initial_table_data[pos..pos+entry_buf_size as usize]);
+            table_controller::add_flow_entry(&mut table_list[table_id as usize], &initial_table_data[pos..pos+entry_buf_size as usize], &mut flow_entry_heap);
             pos += entry_buf_size as usize;
         }
     }

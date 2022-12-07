@@ -2,6 +2,7 @@ use std::sync::RwLock;
 use std::net::TcpStream;
 use std::io::prelude::*;
 use std::io::Error;
+use crate::core::memory::heap::Heap;
 use crate::core::memory::array::Array;
 use crate::controller::cmd;
 use crate::controller::table_controller;
@@ -20,6 +21,8 @@ pub fn stream_handler(mut stream: TcpStream, mut table_list: Array<RwLock<Table>
             return Ok(());
         }
 
+        // 512MB
+        let mut heap = Heap::new(536870912); 
 
         let cmd = request_buffer[0];
         let mut response_bytes = 0;
@@ -29,7 +32,7 @@ pub fn stream_handler(mut stream: TcpStream, mut table_list: Array<RwLock<Table>
         } else if cmd == cmd::RequestCmd::AddFlowEntry as u8 {
             let table_id = request_buffer[1];
             let table = &mut table_list[table_id as usize];
-            table_controller::add_flow_entry(table, &request_buffer[2..]);
+            table_controller::add_flow_entry(table, &request_buffer[2..], &mut heap);
             response_buffer[0] = cmd::ResponseCmd::SuccessMessage as u8;
             response_bytes = 1;
         } else if cmd == cmd::RequestCmd::ShowFlowEntry as u8 {

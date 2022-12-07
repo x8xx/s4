@@ -32,7 +32,7 @@ impl Heap {
 
     pub fn malloc<T>(&mut self, size: usize) -> Array<T> {
         let start_pos = self.next_pos;
-        let end_pos = size_of::<T>() * size;
+        let end_pos = start_pos + (size_of::<T>() * size) as isize;
         self.next_pos= end_pos as isize + 1;
 
         unsafe {

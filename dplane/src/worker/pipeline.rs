@@ -114,6 +114,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
         // from rx (through cache core)
         let rx_result_dequeue_count = pipeline_args.ring_from_rx.dequeue_burst::<RxResult>(&rx_result_list, pipeline_args.batch_count);
         for i in 0..rx_result_dequeue_count {
+            println!("pp: rx result");
             let rx_result = rx_result_list.get(i);
             // println!("pipeline malloc");
             // let mut pipeline_result = pipeline_result_ringbuf.malloc();
@@ -135,6 +136,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
             pipeline_args.pipeline.run_cache_pipeline(rx_result_list.get(i).raw_pkt, *pkt_len,  parse_result, cache_data, &mut output);
 
            if !output_pkt(&pipeline_args.tx_ring_list, pktbuf, output) {
+               println!("pp drop");
                 rx_result_list.get(i).free();
                 pktbuf.free();
                 continue;
@@ -147,9 +149,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
         // // from cache
         let cache_result_dequeue_count = pipeline_args.ring_from_cache.dequeue_burst::<CacheResult>(&cache_result_list, pipeline_args.batch_count);
         for i in 0..cache_result_dequeue_count {
-            // println!("pipeline malloc");
-            // let mut pipeline_result = pipeline_result_ringbuf.malloc();
-            // println!("pipeline malloc ok");
+            println!("pp: cache result");
 
             let CacheResult {
                 owner_ring: _,
@@ -203,7 +203,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
 
 
            if !output_pkt(&pipeline_args.tx_ring_list, pktbuf, output) {
-               println!("drop");
+               println!("pp: drop");
                rx_result_list.get(i).free();
                pktbuf.free();
                continue;

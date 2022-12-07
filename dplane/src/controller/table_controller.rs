@@ -1,4 +1,5 @@
 use std::sync::RwLock;
+use crate::core::memory::heap::Heap;
 use crate::core::memory::array::Array;
 use crate::pipeline::table::Table;
 use crate::pipeline::table::FlowEntry;
@@ -10,11 +11,12 @@ use crate::pipeline::table::ActionSet;
  * request buffer rule
  * value_count | ( value_len | value* | prefix_mask )* | priority | action_id | ( action_data_len | action_data* )* 
  */
-pub fn add_flow_entry(table: &mut RwLock<Table>, request_buffer: &[u8]) {
+pub fn add_flow_entry(table: &mut RwLock<Table>, request_buffer: &[u8], heap: &mut Heap) {
     // create FlowEntry
     // 1. values
     let value_count = request_buffer[0];
-    let mut values = Array::<MatchFieldValue>::new(value_count as usize);
+    // let mut values = Array::<MatchFieldValue>::new(value_count as usize);
+    let mut values = heap.malloc::<MatchFieldValue>(value_count as usize);
     let mut pos: usize = 1;
     for i in 0..value_count as usize {
         let value_len = request_buffer[pos];
@@ -22,7 +24,8 @@ pub fn add_flow_entry(table: &mut RwLock<Table>, request_buffer: &[u8]) {
             value: if value_len == 0 {
                 None
             } else {
-                Some(Array::<u8>::new(value_len as usize))
+                // Some(Array::<u8>::new(value_len as usize))
+                Some(heap.malloc::<u8>(value_len as usize))
             },
             prefix_mask: 0,
         };
@@ -56,7 +59,8 @@ pub fn add_flow_entry(table: &mut RwLock<Table>, request_buffer: &[u8]) {
     let action_i32_residue = (action_data_len % 4) as usize;
     pos += 1;
 
-    let mut action_data = Array::<i32>::new(action_i32_len + if action_i32_residue == 0 {0} else {1});
+    // let mut action_data = Array::<i32>::new(action_i32_len + if action_i32_residue == 0 {0} else {1});
+    let mut action_data = heap.malloc::<i32>(action_i32_len + if action_i32_residue == 0 {0} else {1});
     for i in 0..action_i32_len {
         action_data[i] = request_buffer[pos] as i32; 
         pos += 1;
@@ -95,6 +99,7 @@ pub fn show_flow_entry(table: &Table) -> String {
 #[cfg(test)]
 mod tests {
     use std::sync::RwLock;
+    use crate::core::memory::heap::Heap;
     use crate::core::memory::array::Array;
     use crate::config::DpConfigTable;
     use crate::config::DpConfigTableKey;
@@ -137,6 +142,8 @@ mod tests {
         });
         let mut pkt = Array::new(64);
 
+        // 512MB
+        let mut heap = Heap::new(536870912); 
 
         {
             let mut buffer = Vec::new();
@@ -159,7 +166,7 @@ mod tests {
             buffer.push(40);
             buffer.push(50);
             buffer.push(60);
-            add_flow_entry(&mut table, &buffer);
+            add_flow_entry(&mut table, &buffer, &mut heap);
             let unlock_table = table.read().unwrap();
             pkt[0] = 0x01;
             pkt[1] = 0x02;
