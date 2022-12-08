@@ -58,13 +58,18 @@ pub fn output_pkt(tx_ring_list: &Array<Ring>, pktbuf: &mut PktBuf, output: Outpu
     match output {
         Output::Port(port_num) => {
             debug_log!("Pipeline enqueue to Tx{}", port_num);
-            tx_ring_list[port_num as usize].enqueue(pktbuf);
+            if tx_ring_list[port_num as usize].enqueue(pktbuf) < 0 {
+                return false;
+            }
         },
         Output::All => {
             // TODO
         },
         Output::Controller => {
-            tx_ring_list[0].enqueue(pktbuf);
+            debug_log!("Pipeline enqueue to Tx0 (CPU)");
+            if tx_ring_list[0].enqueue(pktbuf) < 0 {
+                return false;
+            }
         },
         Output::Drop => {
             return false;
@@ -119,8 +124,8 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
 
            if !output_pkt(&pipeline_args.tx_ring_list, pktbuf, output) {
                 debug_log!("Pipeline{} drop pkt", pipeline_args.id);
-                rx_result_list.get(i).free();
                 pktbuf.free();
+                rx_result_list.get(i).free();
                 continue;
            } 
 
@@ -137,8 +142,8 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 owner_ring: _,
                 rx_result,
                 id: ref cache_id,
-                is_cache_hit: ref is_cache_hit,
-                cache_data: ref cache_data, 
+                is_cache_hit,
+                cache_data, 
             } = cache_result_list.get(i);
 
             let RxResult {
@@ -147,8 +152,8 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 pktbuf,
                 raw_pkt,
                 pkt_len,
-                parse_result: ref parse_result,
-                cache_data: ref mut cache_data,
+                parse_result,
+                cache_data: _,
                 hash_calc_result,
             } = unsafe { &mut **rx_result };
 
@@ -188,10 +193,10 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
 
             if !output_pkt(&pipeline_args.tx_ring_list, pktbuf, output) {
                 debug_log!("Pipeline{} drop pkt", pipeline_args.id);
-                cache_result_list.get(i).free();
-                debug_log!("Pipeline{} success rx_result free", pipeline_args.id);
                 pktbuf.free();
                 debug_log!("Pipeline{} success pktbuf free", pipeline_args.id);
+                cache_result_list.get(i).free();
+                debug_log!("Pipeline{} success rx_result free", pipeline_args.id);
                 continue;
             } 
 

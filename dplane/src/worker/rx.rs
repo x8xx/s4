@@ -176,13 +176,19 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             // l1_cache
             debug_log!("Rx{} check L1 Cache", rx_args.id);
             let l1_hash = l1_hash_function_murmurhash3(pkt, rx_result.parse_result.hdr_size, rx_args.l1_hash_seed);
+            debug_log!("Rx{} check L1 Cache l1_hash{}", rx_args.id, l1_hash);
             let cache_element = rx_args.l1_cache[l1_hash as usize].read().unwrap();
             if cache_element.cmp_ptr_key(pkt, rx_result.parse_result.hdr_size as isize) {
                 debug_log!("Rx{} Hit L1 Cache", rx_args.id);
                 debug_log!("Rx{} debug1", rx_args.id);
                 rx_result.cache_data = cache_element.data.clone();
                 debug_log!("Rx{} debug2", rx_args.id);
-                rx_args.pipeline_ring_list[next_pipeline_core].enqueue(rx_result);
+                if rx_args.pipeline_ring_list[next_pipeline_core].enqueue(rx_result) < 0 {
+                    debug_log!("Rx{} failed enqueue to Pipeline Core {}", rx_args.id, next_pipeline_core);
+                    rx_result.free();
+                    rx_result.pktbuf.free();
+                    continue;
+                }
                 debug_log!("Rx{} enqueue to Pipeline Core {}", rx_args.id, next_pipeline_core);
 
                 next_pipeline_core += 1;
@@ -251,7 +257,13 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
             debug_log!("Rx{} enqueue to Cache Core {}", rx_args.id, cache_core);
             rx_result.hash_calc_result = hash_calc_result as *mut HashCalcResult;
-            rx_args.cache_ring_list[cache_core].enqueue(rx_result);
+            if rx_args.cache_ring_list[cache_core].enqueue(rx_result) < 0 {
+                debug_log!("Rx{} failed enqueue to Cache Core {}", rx_args.id, cache_core);
+                unsafe { (*rx_result.hash_calc_result).free(); };
+                rx_result.pktbuf.free();
+                rx_result.free();
+            }
+            debug_log!("Rx{} complete  enqueue to Cache Core {}", rx_args.id, cache_core);
 
 
             next_cache_core += 1;

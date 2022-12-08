@@ -55,21 +55,21 @@ impl Ring {
         }
     }
 
-    pub fn enqueue<T>(&self, obj: &mut T) -> usize {
+    pub fn enqueue<T>(&self, obj: &mut T) -> i32 {
         unsafe {
             dpdk_sys::rte_ring_enqueue(
                 self.ring,
                 obj as *mut T as *mut c_void,
-            ) as usize
+            )
         }
     }
 
-    pub fn dequeue<T>(&self, obj: &mut &mut T) -> usize {
+    pub fn dequeue<T>(&self, obj: &mut &mut T) -> i32 {
         unsafe {
             dpdk_sys::rte_ring_dequeue(
                 self.ring,
                 obj as *mut &mut T as *mut *mut T as *mut *mut c_void,
-            ) as usize
+            )
         }
     }
 }

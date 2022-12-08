@@ -103,7 +103,16 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
                     cache_result.cache_data = cache_element.data.clone();
                     cache_result.is_cache_hit = true;
 
-                    cache_args.pipeline_ring_list[next_pipeline_core].enqueue(cache_result);
+                    debug_log!("Cache{} enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
+                    if cache_args.pipeline_ring_list[next_pipeline_core].enqueue(cache_result) < 0 {
+                        debug_log!("Cache{} failed enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
+                        rx_result.pktbuf.free();
+                        unsafe { (*rx_result.hash_calc_result).free(); };
+                        rx_result.free();
+                        cache_result.free();
+                        continue;
+                    }
+                    debug_log!("Cache{} complete enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
                     next_pipeline_core = next_core(next_pipeline_core, cache_args.pipeline_ring_list.len());
                     continue;
                 }
@@ -122,7 +131,16 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
             // }
 
             debug_log!("Cache{} enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
-            cache_args.pipeline_ring_list[next_pipeline_core].enqueue(cache_result);
+            if cache_args.pipeline_ring_list[next_pipeline_core].enqueue(cache_result) < 0 {
+                debug_log!("Cache{} failed enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
+                rx_result.pktbuf.free();
+                unsafe { (*rx_result.hash_calc_result).free(); };
+                rx_result.free();
+                cache_result.free();
+                continue;
+            }
+            debug_log!("Cache{} complete enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
+
             next_pipeline_core = next_core(next_pipeline_core, cache_args.pipeline_ring_list.len());
             continue;
         }

@@ -111,6 +111,38 @@ impl Interface {
         }
     }
 
+    pub fn show_info(&self) {
+        unsafe {
+            let mut port_info: dpdk_sys::rte_eth_dev_info = Default::default();
+            if dpdk_sys::rte_eth_dev_info_get(self.port_number, &mut port_info as *mut dpdk_sys::rte_eth_dev_info) < 0 {
+                println!("failed: get port info");
+            } else {
+                println!("port{}: max rx queues {}", self.port_number, port_info.max_rx_queues);
+                println!("port{}: max tx queues {}", self.port_number, port_info.max_tx_queues);
+                println!("port{}: min mtu {}", self.port_number, port_info.min_mtu);
+                println!("port{}: max mtu {}", self.port_number, port_info.max_mtu);
+            }
+
+            let mut link : dpdk_sys::rte_eth_link = Default::default();
+            if dpdk_sys::rte_eth_link_get(self.port_number, &mut link as *mut dpdk_sys::rte_eth_link) < 0 {
+                println!("failed: get port link info");
+            } else {
+                println!("port{}: link {}", self.port_number,  if link.link_status() == 1 { "up" } else { "down" });
+                println!("port{}: link spped {}", self.port_number,  link.link_speed);
+            }
+
+            println!("debug {}", dpdk_sys::rte_eth_promiscuous_get(self.port_number));
+            let mut ma_struct = dpdk_sys::rte_ether_addr::default();
+            let macaddr = dpdk_sys::rte_eth_macaddrs_get(self.port_number, &mut ma_struct as *mut dpdk_sys::rte_ether_addr, 6);
+            println!("debug mac_addr {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", ma_struct.addr_bytes[0],
+                     ma_struct.addr_bytes[1],
+                     ma_struct.addr_bytes[2],
+                     ma_struct.addr_bytes[3],
+                     ma_struct.addr_bytes[4],
+                     ma_struct.addr_bytes[5]);
+        }
+    }
+
     pub fn rx(&self, pktbuf: &mut pktbuf::PktBuf, len: usize) -> u16 {
         unsafe {
             // dpdk_sys::rte_eth_rx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16);
