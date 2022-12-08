@@ -73,7 +73,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
 
     // cache 
     let mut l1_cache_list = Array::<Array<RwLock<CacheElement>>>::new(interface_configs_len);
-    let mut lbf_list = Array::<Array<u64>>::new(interface_configs_len);
+    let mut lbf_list = Array::<Array<RwLock<u64>>>::new(interface_configs_len);
     let mut l2_cache_list = Array::<Array<Array<RwLock<CacheElement>>>>::new(interface_configs_len);
     let mut l3_cache = TupleSpace::new(10000, 417);
 
@@ -83,26 +83,23 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let pipeline_batch_count = 64;
     let tx_batch_count = 64;
 
-    let rx_buf_size = 8192;
-    let cache_buf_size = 8192;
-    let pipeline_buf_size = 8192;
-    let tx_buf_size = 8192;
-    let cache_creater_buf_size = 4096;
-    // let rx_buf_size = 1024;
-    // let cache_buf_size = 1024;
-    // let pipeline_buf_size = 1024;
-    // let tx_buf_size = 1024;
-    // let cache_creater_buf_size = 1024;
+    let pktbuf_size = 8192;
+    let cache_ring_buf_size = 8192;
+    let cache_ring_size = 8192;
+    let new_cache_buf_size = 8192;
+    let pipeline_ring_size = 8192;
+    let tx_ring_size = 8192;
+    let cache_creater_ring_size = 8192;
 
 
     // to main core ring 
-    let cache_creater_ring = ring::Ring::new(cache_creater_buf_size);
+    let cache_creater_ring = ring::Ring::new(cache_creater_ring_size);
 
 
 
     let mut tx_ring_list = Array::<ring::Ring>::new(switch_config.interface_configs.len() + 1);
     for i in 0..tx_ring_list.len() {
-        tx_ring_list.init(i, ring::Ring::new(tx_buf_size));
+        tx_ring_list.init(i, ring::Ring::new(tx_ring_size));
     }
 
 
@@ -113,8 +110,8 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let mut pipeline_args_list = Array::<worker::pipeline::PipelineArgs>::new(switch_config.pipeline_core_num as usize);
 
     for i in 0..pipeline_args_list.len() {
-        pipeline_ring_from_rx_list.init(i, ring::Ring::new(pipeline_buf_size));
-        pipeline_ring_from_cache_list.init(i, ring::Ring::new(pipeline_buf_size));
+        pipeline_ring_from_rx_list.init(i, ring::Ring::new(pipeline_ring_size));
+        pipeline_ring_from_cache_list.init(i, ring::Ring::new(pipeline_ring_size));
 
         pipeline_args_list.init(i, worker::pipeline::PipelineArgs {
             id: i,
@@ -124,7 +121,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             batch_count: pipeline_batch_count,
             table_list_len: table_list.len(),
             header_max_size,
-            buf_size: pipeline_buf_size,
+            buf_size: new_cache_buf_size,
             tx_ring_list: tx_ring_list.clone(),
             cache_creater_ring: cache_creater_ring.clone(),
         });
@@ -145,7 +142,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         l2_cache_list.init(i, Array::new(interface_conf.cache_core_num as usize));
         for j in 0..interface_conf.cache_core_num as usize {
             println!("init: cache core rx-{}, cache-{}", i, j);
-            cache_ring_list.init(j, ring::Ring::new(1024));
+            cache_ring_list.init(j, ring::Ring::new(cache_ring_size));
             l2_cache_list[i].init(j, Array::new(switch_config.l2_cache_size));
             {
                 for k in 0..l2_cache_list[i][j].len() {
@@ -161,7 +158,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
                 id: j,
                 ring: cache_ring_list[j].clone(),
                 batch_count: cache_batch_count,
-                buf_size: cache_buf_size,
+                buf_size: cache_ring_buf_size,
                 header_max_size,
                 l2_cache: l2_cache_list[i][j].clone(),
                 l3_cache: &l3_cache,
@@ -190,7 +187,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             interface: interface.clone(),
             parser: parser::Parser::new(&switch_config.parser_wasm),
             batch_count: rx_batch_count,
-            pktbuf_size: rx_buf_size,
+            pktbuf_size,
             l1_hash_seed: 417,
             l2_hash_seed: 417,
             l1_cache: l1_cache_list[i].clone(),

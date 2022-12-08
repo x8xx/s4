@@ -1,5 +1,6 @@
 use std::ptr::null;
 use std::sync::RwLock;
+use crate::core::logger::log::*;
 use crate::core::memory::array::Array;
 use crate::core::memory::ring::Ring;
 use crate::parser::header::Header;
@@ -18,28 +19,30 @@ pub fn create_new_cache(ring: Ring,
                         header_list: Array<Header>,
                         table_list: Array<RwLock<Table>>,
                         l1_cache_list: Array<Array<RwLock<CacheElement>>>,
-                        lbf_list: Array<Array<u64>>,
+                        lbf_list: Array<Array<RwLock<u64>>>,
                         l2_cache_list: Array<Array<Array<RwLock<CacheElement>>>>,
                         l3_cache: L3Cache) {
     let new_cache_list = Array::<&mut NewCacheElement>::new(32);
     loop {
         let new_cache_dequeue_count = ring.dequeue_burst::<NewCacheElement>(&new_cache_list, 32);
         for i in 0..new_cache_dequeue_count {
-            // println!("check 20");
+            debug_log!("CacheCreater create cache...");
             let new_cache = new_cache_list.get(i);
             let hash_calc_result = unsafe { &mut *new_cache.hash_calc_result };
 
             // L1 Cache
+            debug_log!("CacheCreater create L1 Cache");
             {
                 let mut l1_cache = l1_cache_list[new_cache.rx_id][hash_calc_result.l1_hash as usize].write().unwrap();
-                // println!("L1 Hash: {}", hash_calc_result.l1_hash);
                 l1_cache.key_len = new_cache.l1_key_len as isize;
                 new_cache.l1_key.deepcopy(&mut l1_cache.key);
                 new_cache.cache_data.deepcopy(&mut l1_cache.data);
             }
+            debug_log!("CacheCreater DONE create L1 Cache hash:{}", hash_calc_result.l1_hash);
 
 
             // L2 Cache
+            debug_log!("CacheCreater create L2 Cache");
             {
                 let mut l2_cache = l2_cache_list[new_cache.rx_id][new_cache.cache_id][hash_calc_result.l2_hash as usize].write().unwrap();
                 // println!("L2 Hash: {}", hash_calc_result.l2_hash);
@@ -47,6 +50,16 @@ pub fn create_new_cache(ring: Ring,
                 hash_calc_result.l2_key.deepcopy(&mut l2_cache.key);
                 new_cache.cache_data.deepcopy(&mut l2_cache.data);
             }
+            debug_log!("CacheCreater DONE create L2 Cache id:{} hash:{}", new_cache.cache_id,  hash_calc_result.l2_hash);
+
+
+            // LBF
+            debug_log!("CacheCreater flag up in LBF");
+            {
+                let mut core_flag = lbf_list[new_cache.rx_id][hash_calc_result.l2_hash as usize].write().unwrap();
+                *core_flag |= 1 << new_cache.cache_id;
+            }
+            debug_log!("CacheCreater DONE flag up in LBF");
 
 
             // L3 Cache
@@ -95,6 +108,8 @@ pub fn create_new_cache(ring: Ring,
 
             hash_calc_result.free();
             new_cache.free();
+
+            debug_log!("CacheCreater cosmplete insert to cache");
         }
     }
 }
