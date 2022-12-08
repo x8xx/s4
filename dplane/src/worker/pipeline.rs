@@ -92,6 +92,8 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
     let rx_result_list = Array::<&mut RxResult>::new(pipeline_args.batch_count);
     let cache_result_list = Array::<&mut CacheResult>::new(pipeline_args.batch_count);
 
+    log!("Start Pipeline{} Core", pipeline_args.id);
+    loop {
         // from rx (through cache core)
         let rx_result_dequeue_count = pipeline_args.ring_from_rx.dequeue_burst::<RxResult>(&rx_result_list, pipeline_args.batch_count);
         for i in 0..rx_result_dequeue_count {
