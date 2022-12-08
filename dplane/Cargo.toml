@@ -7,7 +7,7 @@ edition = "2021"
 default = ["prod", "logger-std", "log-level-debug"]
 # default = ["debug"]
 prod = ["dpdk", "runtime_wasm", "wasm_wasmer", "wasmer_llvm"]
-debug = ["linux", "runtime_wasm", "wasm_wasmer"]
+debug = ["linux", "runtime_wasm", "wasm_wasmer", "logger-std", "log-level-debug"]
 
 dpdk = []
 linux = []

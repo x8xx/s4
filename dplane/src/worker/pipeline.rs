@@ -57,7 +57,7 @@ impl NewCacheElement {
 pub fn output_pkt(tx_ring_list: &Array<Ring>, pktbuf: &mut PktBuf, output: Output) -> bool {
     match output {
         Output::Port(port_num) => {
-            debug_log!("Pipeline enqueue to tx{}", port_num);
+            debug_log!("Pipeline enqueue to Tx{}", port_num);
             tx_ring_list[port_num as usize].enqueue(pktbuf);
         },
         Output::All => {
@@ -92,8 +92,6 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
     let rx_result_list = Array::<&mut RxResult>::new(pipeline_args.batch_count);
     let cache_result_list = Array::<&mut CacheResult>::new(pipeline_args.batch_count);
 
-    log!("Start Pipeline{} Core", pipeline_args.id);
-    loop {
         // from rx (through cache core)
         let rx_result_dequeue_count = pipeline_args.ring_from_rx.dequeue_burst::<RxResult>(&rx_result_list, pipeline_args.batch_count);
         for i in 0..rx_result_dequeue_count {
@@ -169,7 +167,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
 
                 debug_log!("Pipeline{} run pipeline", pipeline_args.id);
                 pipeline_args.pipeline.run_pipeline(*raw_pkt, *pkt_len, parse_result, &mut new_cache_element.cache_data, &mut output);
-                debug_log!("Pipeline{} cmplete pipeline", pipeline_args.id);
+                debug_log!("Pipeline{} complete pipeline", pipeline_args.id);
 
                 new_cache_element.l1_key_len = parse_result.hdr_size;
                 for i in 0..new_cache_element.l1_key_len {
@@ -186,15 +184,16 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 pipeline_args.cache_creater_ring.enqueue(new_cache_element);
             }
 
-
-           if !output_pkt(&pipeline_args.tx_ring_list, pktbuf, output) {
+            if !output_pkt(&pipeline_args.tx_ring_list, pktbuf, output) {
                 debug_log!("Pipeline{} drop pkt", pipeline_args.id);
-               rx_result_list.get(i).free();
-               pktbuf.free();
-               continue;
-           } 
+                cache_result_list.get(i).free();
+                debug_log!("Pipeline{} success rx_result free", pipeline_args.id);
+                pktbuf.free();
+                debug_log!("Pipeline{} success pktbuf free", pipeline_args.id);
+                continue;
+            } 
 
-           rx_result_list.get(i).free();
+            cache_result_list.get(i).free();
         }
 
         if false {
