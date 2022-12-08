@@ -2,6 +2,8 @@ use std::ffi::c_void;
 use std::mem::transmute;
 use std::sync::Arc;
 use std::sync::RwLock;
+use crate::core::logger::log::log;
+use crate::core::logger::log::debug_log;
 use crate::core::memory::ring::Ring;
 use crate::core::memory::ring::RingBuf;
 use crate::core::memory::ring::init_ringbuf_element;
@@ -61,7 +63,7 @@ fn next_core(mut current_core: usize, core_limit: usize) -> usize {
 
 pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
     let cache_args = unsafe { &mut *transmute::<*mut c_void, *mut CacheArgs>(cache_args_ptr) };
-    println!("Init Cache{} Core", cache_args.id);
+    log!("Init Cache{} Core", cache_args.id);
 
     // init ringbuf
     let mut cache_result_ring_buf = RingBuf::<CacheResult>::new(cache_args.buf_size);
@@ -78,13 +80,14 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
         key_len: 0,
     };
 
-    println!("Start Cache{} Core", cache_args.id);
+    log!("Start Cache{} Core", cache_args.id);
     loop {
         let rx_result_dequeue_count = cache_args.ring.dequeue_burst::<RxResult>(&rx_result_list, cache_args.batch_count);
         for i in 0..rx_result_dequeue_count {
-            println!("cache malloc");
+            debug_log!("Cache{} rx_result malloc", cache_args.id);
             let cache_result = cache_result_ring_buf.malloc();
-            println!("cache malloc ok");
+            debug_log!("Cache{} done rx_result malloc", cache_args.id);
+
             let rx_result = rx_result_list.get(i);
             let hash_calc_result = unsafe { &mut *rx_result.hash_calc_result };
 
@@ -92,9 +95,11 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
             cache_result.rx_result = (*rx_result) as *mut RxResult;
 
             if hash_calc_result.is_lbf_hit {
+                debug_log!("Cache{} Check L1 Cache", cache_args.id);
                 // l2 cache
                 let cache_element = cache_args.l2_cache[hash_calc_result.l2_hash as usize].read().unwrap();
                 if cache_element.cmp_ptr_key(hash_calc_result.l2_key.as_ptr(), hash_calc_result.l2_key_len as isize) {
+                    debug_log!("Cache{} Hit L2 Cache", cache_args.id);
                     cache_result.cache_data = cache_element.data.clone();
                     cache_result.is_cache_hit = true;
 
@@ -102,6 +107,7 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
                     next_pipeline_core = next_core(next_pipeline_core, cache_args.pipeline_ring_list.len());
                     continue;
                 }
+                debug_log!("Cache{} No Hit L2 Cache", cache_args.id);
             }
 
 
@@ -115,6 +121,7 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
             //     None => {},
             // }
 
+            debug_log!("Cache{} enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
             cache_args.pipeline_ring_list[next_pipeline_core].enqueue(cache_result);
             next_pipeline_core = next_core(next_pipeline_core, cache_args.pipeline_ring_list.len());
             continue;

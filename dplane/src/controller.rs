@@ -83,16 +83,16 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let pipeline_batch_count = 64;
     let tx_batch_count = 64;
 
-    // let rx_buf_size = 8192;
-    // let cache_buf_size = 8192;
-    // let pipeline_buf_size = 8192;
-    // let tx_buf_size = 8192;
-    // let cache_creater_buf_size = 4096;
-    let rx_buf_size = 1024;
-    let cache_buf_size = 1024;
-    let pipeline_buf_size = 1024;
-    let tx_buf_size = 1024;
-    let cache_creater_buf_size = 1024;
+    let rx_buf_size = 8192;
+    let cache_buf_size = 8192;
+    let pipeline_buf_size = 8192;
+    let tx_buf_size = 8192;
+    let cache_creater_buf_size = 4096;
+    // let rx_buf_size = 1024;
+    // let cache_buf_size = 1024;
+    // let pipeline_buf_size = 1024;
+    // let tx_buf_size = 1024;
+    // let cache_creater_buf_size = 1024;
 
 
     // to main core ring 

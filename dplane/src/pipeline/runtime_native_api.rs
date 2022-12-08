@@ -1,4 +1,5 @@
 use std::sync::RwLock;
+use crate::core::logger::log::*;
 use crate::core::memory::array::Array;
 use crate::parser::parse_result::ParseResult;
 use crate::cache::cache::CacheData;
@@ -36,7 +37,9 @@ pub fn table_search(pipeline_args_ptr: i64, table_id: i32) -> i64 {
         &unsafe { &*cache_data[table_id as usize] }.action as *const ActionSet as i64
     } else {
         let table = table_list[table_id as usize].read().unwrap();
+        debug_log!("table search start");
         let flow_entry = table.search(*pkt as *const u8, *parse_result);
+        debug_log!("table search done");
         cache_data[table_id as usize] = flow_entry as *const FlowEntry;
         &flow_entry.action as *const ActionSet as i64
     }

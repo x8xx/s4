@@ -10,11 +10,11 @@ macro_rules! log {
 macro_rules! debug_log {
     ($fmt:expr) => {
         #[cfg(feature="log-level-debug")]
-        log!($fmt);
+        log!(concat!("DEBUG: ", $fmt));
     };
     ($fmt:expr, $($arg:tt)*) => {
         #[cfg(feature="log-level-debug")]
-        log!($fmt, $($arg)*);
+        log!(concat!("DEBUG: ", $fmt), $($arg)*);
     };
 }
 

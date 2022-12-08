@@ -1,6 +1,8 @@
 use std::ffi::c_void;
 use std::mem::transmute;
 use std::sync::RwLock;
+use crate::core::logger::log::log;
+use crate::core::logger::log::debug_log;
 use crate::core::memory::ring::Ring;
 use crate::core::memory::ring::RingBuf;
 use crate::core::memory::ring::{init_ringbuf_element, malloc_ringbuf_all_element, free_ringbuf_all_element};
@@ -88,12 +90,12 @@ impl HashCalcResult {
 
 pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     let rx_args = unsafe { &mut *transmute::<*mut c_void, *mut RxArgs>(rx_args_ptr) };
-    println!("Init Rx{} Core", rx_args.id);
+    log!("Init Rx{} Core", rx_args.id);
 
     let mut heap = Heap::new(rx_args.pktbuf_size * (1 + rx_args.header_list.len() + rx_args.l2_key_max_len as usize));
 
     // init ringbuf
-    println!("debug rx init");
+    debug_log!("Rx{} init rx_result_ring_buf", rx_args.id);
     let mut rx_result_ring_buf = RingBuf::<RxResult>::new(rx_args.pktbuf_size);
     {
         let rx_result_array = malloc_ringbuf_all_element!(rx_result_ring_buf, RxResult);
@@ -109,15 +111,16 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
         }
         free_ringbuf_all_element!(rx_result_ring_buf, rx_result_array);
     }
-    println!("debug rx init end");
-
+    debug_log!("Rx{} done init rx_result_ring_buf", rx_args.id);
 
     // init hash_calc_result
+    debug_log!("Rx{} init hash_calc_result_ring_buf", rx_args.id);
     let mut hash_calc_result_ring_buf = RingBuf::<HashCalcResult>::new(rx_args.pktbuf_size);
     init_ringbuf_element!(hash_calc_result_ring_buf, HashCalcResult, {
         owner_ring => &mut hash_calc_result_ring_buf as *mut RingBuf<HashCalcResult>,
         l2_key => heap.malloc(rx_args.l2_key_max_len as usize),
     });
+    debug_log!("Rx{} done init hash_calc_result_ring_buf", rx_args.id);
 
 
     let mut next_pipeline_core = 0;
@@ -126,22 +129,26 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
     let mut count = 0;
 
-    println!("Start Rx{} Core", rx_args.id);
+    log!("Start Rx{} Core", rx_args.id);
     loop {
         let pkt_count = rx_args.interface.rx(&mut pktbuf_list[0], rx_args.batch_count);
         for i in 0..pkt_count as usize {
             count += 1;
             println!("count : {}", count);
-            println!("rx malloc");
-            let rx_result = rx_result_ring_buf.malloc();
-            println!("rx malloc ok");
 
+            debug_log!("Rx{} rx_result malloc", rx_args.id);
+            let rx_result = rx_result_ring_buf.malloc();
+            debug_log!("Rx{} done rx_result malloc", rx_args.id);
+
+            debug_log!("Rx{} get raw pkt", rx_args.id);
             rx_result.pktbuf = pktbuf_list.get(i).clone();
             let (pkt, pkt_len) = rx_result.pktbuf.get_raw_pkt();
             if pkt_len == 0 {
+                debug_log!("Rx{} raw pkt was null", rx_args.id);
                 rx_result.free();
                 continue;
             }
+            debug_log!("Rx{} done get raw pkt", rx_args.id);
 
             // unsafe {
             //     println!("{:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(0),*pkt.offset(1),*pkt.offset(2),*pkt.offset(3),*pkt.offset(4),*pkt.offset(5));
@@ -150,25 +157,32 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             // }
 
 
+            debug_log!("Rx{} start pkt parse", rx_args.id);
             rx_result.parse_result.hdr_size = 0;
             for i in 0..rx_result.parse_result.header_list.len() {
                 rx_result.parse_result.header_list[i].is_valid = false;
             }
             if  !rx_args.parser.parse(pkt, pkt_len, &mut rx_result.parse_result) {
+                debug_log!("Rx{} failed pkt parse", rx_args.id);
                 rx_result.free();
+                rx_result.pktbuf.free();
                 continue;
             }
+            debug_log!("Rx{} success pkt parse", rx_args.id);
 
             rx_result.raw_pkt = pkt;
             rx_result.pktbuf = pktbuf_list[i].clone();
             
 
             // l1_cache
+            debug_log!("Rx{} check L1 Cache", rx_args.id);
             let l1_hash = l1_hash_function_murmurhash3(pkt, rx_result.parse_result.hdr_size, rx_args.l1_hash_seed);
             let cache_element = rx_args.l1_cache[l1_hash as usize].read().unwrap();
             if cache_element.cmp_ptr_key(pkt, rx_result.parse_result.hdr_size as isize) {
+                debug_log!("Rx{} Hit L1 Cache", rx_args.id);
                 rx_result.cache_data= cache_element.data.clone();
                 rx_args.pipeline_ring_list[next_pipeline_core].enqueue(rx_result);
+                debug_log!("Rx{} enqueue to Pipeline Core {}", rx_args.id, next_pipeline_core);
 
                 next_pipeline_core += 1;
                 if next_pipeline_core == rx_args.pipeline_ring_list.len() {
@@ -176,17 +190,19 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 }
                 continue;
             }
-            println!("no hit?????????????");
+            debug_log!("Rx{} No Hit L1 Cache", rx_args.id);
 
 
-            println!("hash malloc");
+            debug_log!("Rx{} hash_calc_result malloc", rx_args.id);
             let hash_calc_result = hash_calc_result_ring_buf.malloc();
-            println!("hash malloc ok");
+            debug_log!("Rx{} done hash_calc_result malloc", rx_args.id);
             hash_calc_result.is_lbf_hit = false;
             hash_calc_result.l1_hash = l1_hash;
 
 
             // lbf
+            debug_log!("Rx{} check LBF", rx_args.id);
+            debug_log!("Rx{} create L2 Key", rx_args.id);
             let parsed_header_list = &rx_result.parse_result.header_list;
             let l2_key_ptr = hash_calc_result.l2_key.as_ptr();
             let mut l2_key_next_offset = 0;
@@ -211,6 +227,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 }
             }
             hash_calc_result.l2_key_len = l2_key_next_offset as u8;
+            debug_log!("Rx{} done L2 Key", rx_args.id);
 
             let l2_hash = l2_hash_function_murmurhash3(l2_key_ptr, hash_calc_result.l2_key_len as usize, rx_args.l2_hash_seed);
             hash_calc_result.l2_hash = l2_hash;
@@ -221,14 +238,17 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
             // no hit
             if cache_core == rx_args.cache_ring_list.len() {
+                debug_log!("Rx{} No Hit L2 Hash", rx_args.id);
                 hash_calc_result.is_lbf_hit = false;
                 cache_core = next_cache_core as usize;
             // hit
             } else {
+                debug_log!("Rx{} Hit L2 Hash", rx_args.id);
                 hash_calc_result.is_lbf_hit = true;
             }
 
 
+            debug_log!("Rx{} enqueue to Cache Core {}", rx_args.id, cache_core);
             rx_result.hash_calc_result = hash_calc_result as *mut HashCalcResult;
             rx_args.cache_ring_list[cache_core].enqueue(rx_result);
 
