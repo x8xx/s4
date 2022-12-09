@@ -83,13 +83,29 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let pipeline_batch_count = 64;
     let tx_batch_count = 64;
 
-    let pktbuf_size = 8192;
-    let cache_ring_buf_size = 8192;
-    let cache_ring_size = 8192;
-    let new_cache_buf_size = 8192;
-    let pipeline_ring_size = 8192;
-    let tx_ring_size = 8192;
-    let cache_creater_ring_size = 8192;
+    // let pktbuf_size = 8192;
+    // let cache_ring_buf_size = 8192;
+    // let cache_ring_size = 8192;
+    // let new_cache_buf_size = 8192;
+    // let pipeline_ring_size = 8192;
+    // let tx_ring_size = 8192;
+    // let cache_creater_ring_size = 8192;
+    //
+    let pktbuf_size = 16777216;
+    let cache_ring_buf_size = 65536;
+    let cache_ring_size = 65536;
+    let new_cache_buf_size = 65536;
+    let pipeline_ring_size = 65536;
+    let tx_ring_size = 65536;
+    let cache_creater_ring_size = 65536;
+    //
+    // let pktbuf_size = 16777216;
+    // let cache_ring_buf_size = 16777216;
+    // let cache_ring_size = 16777216;
+    // let new_cache_buf_size = 16777216;
+    // let pipeline_ring_size = 16777216;
+    // let tx_ring_size = 16777216;
+    // let cache_creater_ring_size = 16777216;
 
 
     // to main core ring 
@@ -231,18 +247,27 @@ pub fn start_controller(switch_config: &SwitchConfig) {
 
 
     // run cache crater thread
-    let cache_creater_ring_for_main_core = cache_creater_ring.clone();
-    let l3_cache_clone = L3Cache { l3_cache: &l3_cache as *const TupleSpace as *mut TupleSpace};
+    // let cache_creater_ring_for_main_core = cache_creater_ring.clone();
+    // let l3_cache_clone = L3Cache { l3_cache: &l3_cache as *const TupleSpace as *mut TupleSpace};
     let table_list_clone = table_list.clone();
-    thread::spawn(move || {
-        cache_controller::create_new_cache(cache_creater_ring_for_main_core,
-                                           header_list.clone(),
-                                           table_list_clone,
-                                           l1_cache_list.clone(),
-                                           lbf_list.clone(),
-                                           l2_cache_list.clone(),
-                                           l3_cache_clone);
-    });
+    // thread::spawn(move || {
+    //     cache_controller::create_new_cache(cache_creater_ring_for_main_core,
+    //                                        header_list.clone(),
+    //                                        table_list_clone,
+    //                                        l1_cache_list.clone(),
+    //                                        lbf_list.clone(),
+    //                                        l2_cache_list.clone(),
+    //                                        l3_cache_clone);
+    // });
+    let mut cache_creater_args = worker::cache_creater::CacheCreaterArgs {
+        ring: cache_creater_ring.clone(),
+        header_list: header_list.clone(),
+        table_list: table_list_clone,
+        l1_cache_list: l1_cache_list.clone(),
+        lbf_list: lbf_list.clone(),
+        l2_cache_list: l2_cache_list.clone(),
+    };
+    spawn(worker::cache_creater::start_cache_creater, &mut cache_creater_args as *mut worker::cache_creater::CacheCreaterArgs as *mut c_void);
 
 
     println!("🚀Launch DP Server  {}", switch_config.listen_address);
