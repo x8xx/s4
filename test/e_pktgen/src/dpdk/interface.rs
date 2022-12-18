@@ -6,28 +6,25 @@ use crate::dpdk::pktbuf;
 
 #[derive(Clone)]
 pub struct Interface {
-    port_number: u16,
+    pub port_number: u16,
+    pub queue_number: u16,
 }
 
-impl Interface {
-    pub fn new(name: &str) -> Self {
-        let port_number = Interface::find_interface_from_name(name);     
-        let mempool = unsafe {
-            dpdk_sys::rte_pktmbuf_pool_create(
-                crate::dpdk::common::gen_random_name() .as_ptr() as *mut c_char,
-                8192,
-                256,
-                0,
-                dpdk_sys::RTE_MBUF_DEFAULT_BUF_SIZE.try_into().unwrap(),
-                dpdk_sys::rte_socket_id().try_into().unwrap()
-            )
-        };
-        println!("{} port {}", name, port_number);
-        Interface::up(port_number, mempool);
 
-        Interface {
-            port_number,
-        }
+impl Interface {
+    pub fn init(name: &str) -> (u16, u16, u16) {
+        let port_number = Interface::find_interface_from_name(name);     
+        let (max_rx_queues, max_tx_queues) = unsafe {
+            let mut port_info: dpdk_sys::rte_eth_dev_info = Default::default();
+            if dpdk_sys::rte_eth_dev_info_get(port_number, &mut port_info as *mut dpdk_sys::rte_eth_dev_info) < 0 {
+                panic!("failed: get port info");
+            }
+            (port_info.max_rx_queues, port_info.max_tx_queues)
+        };
+
+        Interface::up(port_number, max_rx_queues, max_tx_queues);
+
+        (port_number, max_rx_queues, max_tx_queues)
     }
 
     fn find_interface_from_name(name: &str) -> u16 {
@@ -52,23 +49,34 @@ impl Interface {
         panic!("Cannot get interface {}\n", name);
     }
 
-    fn up(port_number: u16, mempool: *mut dpdk_sys::rte_mempool) {
+    fn up(port_number: u16, max_rx_queues: u16, max_tx_queues: u16) {
         unsafe {
             let port_conf: dpdk_sys::rte_eth_conf = Default::default();
-            if dpdk_sys::rte_eth_dev_configure(port_number, 1, 1, &port_conf as *const _) < 0 {
+            if dpdk_sys::rte_eth_dev_configure(port_number, max_rx_queues, max_tx_queues, &port_conf as *const _) < 0 {
                 panic!("Cannot configure device\n");
             }
 
             let dev_socket_id = dpdk_sys::rte_eth_dev_socket_id(port_number).try_into().unwrap();
 
-            if dpdk_sys::rte_eth_rx_queue_setup(port_number, 0, 1024, dev_socket_id, null_mut(), mempool) < 0 {
-                panic!("Error rte_eth_rx_queue_setup\n");
+            for i in 0..max_rx_queues {
+                let mempool = dpdk_sys::rte_pktmbuf_pool_create(
+                    crate::dpdk::common::gen_random_name() .as_ptr() as *mut c_char,
+                    8192,
+                    256,
+                    0,
+                    dpdk_sys::RTE_MBUF_DEFAULT_BUF_SIZE.try_into().unwrap(),
+                    dpdk_sys::rte_socket_id().try_into().unwrap()
+                );
 
+                if dpdk_sys::rte_eth_rx_queue_setup(port_number, i, 1024, dev_socket_id, null_mut(), mempool) < 0 {
+                    panic!("Error rte_eth_rx_queue_setup Port{} Queue{}\n", port_number, i);
+                }
             }
 
-            if dpdk_sys::rte_eth_tx_queue_setup(port_number, 0, 1024, dev_socket_id, null_mut()) < 0 {
-                panic!("Error rte_eth_tx_queue_setup\n");
-
+            for i in 0..max_tx_queues {
+                if dpdk_sys::rte_eth_tx_queue_setup(port_number, i, 1024, dev_socket_id, null_mut()) < 0 {
+                    panic!("Error rte_eth_tx_queue_setup Port{} Queue{}\n", port_number, i);
+                }
             }
 
             if dpdk_sys::rte_eth_dev_start(port_number) < 0 {
@@ -106,7 +114,7 @@ impl Interface {
         unsafe {
             dpdk_sys::rte_eth_rx_burst(
                 self.port_number,
-                0,
+                self.queue_number,
                 pktbuf as *mut pktbuf::PktBuf as *mut *mut dpdk_sys::rte_mbuf,
                 len as u16
             )
@@ -118,7 +126,7 @@ impl Interface {
         unsafe {
             dpdk_sys::rte_eth_tx_burst(
                 self.port_number,
-                0,
+                self.queue_number,
                 pktbuf as *mut pktbuf::PktBuf as *mut *mut dpdk_sys::rte_mbuf,
                 len as u16,
             )
