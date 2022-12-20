@@ -19,6 +19,9 @@ use crate::cache::cache::CacheData;
 use crate::cache::hash::l1_hash_function_murmurhash3;
 use crate::cache::hash::l2_hash_function_murmurhash3;
 
+use std::time::Duration;
+use std::time::Instant;
+
 
 #[repr(C)]
 pub struct RxArgs {
@@ -90,7 +93,7 @@ impl HashCalcResult {
 
 pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     let rx_args = unsafe { &mut *transmute::<*mut c_void, *mut RxArgs>(rx_args_ptr) };
-    log!("Init Rx{} Core", rx_args.id);
+    log!("Init Rx{} Core - Port {} Queue {}", rx_args.id, rx_args.interface.port, rx_args.interface.queue);
 
     let mut heap = Heap::new(rx_args.pktbuf_size * (1 + rx_args.header_list.len() + rx_args.l2_key_max_len as usize));
 
@@ -121,19 +124,24 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     });
     debug_log!("Rx{} done init hash_calc_result_ring_buf", rx_args.id);
 
-
     let mut next_pipeline_core = 0;
     let mut next_cache_core = 0;
     let mut pktbuf_list = Array::<PktBuf>::new(rx_args.batch_count);
 
     let mut count = 0;
 
-    log!("Start Rx{} Core", rx_args.id);
+    log!("Start Rx{} Core - Port {} Queue {}", rx_args.id, rx_args.interface.port, rx_args.interface.queue);
+    let end_time = Instant::now() + Duration::from_secs(5);
     loop {
         let pkt_count = rx_args.interface.rx(&mut pktbuf_list[0], rx_args.batch_count);
+        // debug_log!("pkt_count {}", pkt_count);
         for i in 0..pkt_count as usize {
+            // if end_time < Instant::now() {
+            //     panic!("end {}", count);
+            // }
             count += 1;
             println!("count : {}", count);
+            rx_args.interface.debug_show_info();
 
             debug_log!("Rx{} rx_result malloc", rx_args.id);
             let rx_result = rx_result_ring_buf.malloc();
@@ -149,11 +157,11 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             }
             debug_log!("Rx{} done get raw pkt", rx_args.id);
 
-            // unsafe {
-            //     println!("{:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(0),*pkt.offset(1),*pkt.offset(2),*pkt.offset(3),*pkt.offset(4),*pkt.offset(5));
-            //     println!("{:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(6),*pkt.offset(7),*pkt.offset(8),*pkt.offset(9),*pkt.offset(10),*pkt.offset(11));
-            //     println!("{:x} {:x}", *pkt.offset(12),*pkt.offset(13));
-            // }
+            unsafe {
+                debug_log!("Rx{} dst_mac_addr {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", rx_args.id,  *pkt.offset(0),*pkt.offset(1),*pkt.offset(2),*pkt.offset(3),*pkt.offset(4),*pkt.offset(5));
+                // println!("{:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(6),*pkt.offset(7),*pkt.offset(8),*pkt.offset(9),*pkt.offset(10),*pkt.offset(11));
+                // println!("{:x} {:x}", *pkt.offset(12),*pkt.offset(13));
+            }
 
 
             debug_log!("Rx{} start pkt parse", rx_args.id);
@@ -177,25 +185,27 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             debug_log!("Rx{} check L1 Cache", rx_args.id);
             let l1_hash = l1_hash_function_murmurhash3(pkt, rx_result.parse_result.hdr_size, rx_args.l1_hash_seed);
             debug_log!("Rx{} check L1 Cache l1_hash{}", rx_args.id, l1_hash);
-            let cache_element = rx_args.l1_cache[l1_hash as usize].read().unwrap();
-            if cache_element.cmp_ptr_key(pkt, rx_result.parse_result.hdr_size as isize) {
-                debug_log!("Rx{} Hit L1 Cache", rx_args.id);
-                debug_log!("Rx{} debug1", rx_args.id);
-                rx_result.cache_data = cache_element.data.clone();
-                debug_log!("Rx{} debug2", rx_args.id);
-                if rx_args.pipeline_ring_list[next_pipeline_core].enqueue(rx_result) < 0 {
-                    debug_log!("Rx{} failed enqueue to Pipeline Core {}", rx_args.id, next_pipeline_core);
-                    rx_result.free();
-                    rx_result.pktbuf.free();
+            {
+                let cache_element = rx_args.l1_cache[l1_hash as usize].read().unwrap();
+                if cache_element.cmp_ptr_key(pkt, rx_result.parse_result.hdr_size as isize) {
+                    debug_log!("Rx{} Hit L1 Cache", rx_args.id);
+                    debug_log!("Rx{} debug1", rx_args.id);
+                    rx_result.cache_data = cache_element.data.clone();
+                    debug_log!("Rx{} debug2", rx_args.id);
+                    if rx_args.pipeline_ring_list[next_pipeline_core].enqueue(rx_result) < 0 {
+                        debug_log!("Rx{} failed enqueue to Pipeline Core {}", rx_args.id, next_pipeline_core);
+                        rx_result.pktbuf.free();
+                        rx_result.free();
+                        continue;
+                    }
+                    debug_log!("Rx{} enqueue to Pipeline Core {}", rx_args.id, next_pipeline_core);
+
+                    next_pipeline_core += 1;
+                    if next_pipeline_core == rx_args.pipeline_ring_list.len() {
+                        next_pipeline_core = 0;
+                    }
                     continue;
                 }
-                debug_log!("Rx{} enqueue to Pipeline Core {}", rx_args.id, next_pipeline_core);
-
-                next_pipeline_core += 1;
-                if next_pipeline_core == rx_args.pipeline_ring_list.len() {
-                    next_pipeline_core = 0;
-                }
-                continue;
             }
             debug_log!("Rx{} No Hit L1 Cache", rx_args.id);
 
@@ -239,32 +249,33 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             let l2_hash = l2_hash_function_murmurhash3(l2_key_ptr, hash_calc_result.l2_key_len as usize, rx_args.l2_hash_seed);
             hash_calc_result.l2_hash = l2_hash;
 
-            let core_flag = rx_args.lbf[l2_hash as usize].read().unwrap();
-            let mut cache_core = select_cache_core(*core_flag, rx_args.cache_ring_list.len(), next_cache_core);
+            {
+                let core_flag = rx_args.lbf[l2_hash as usize].read().unwrap();
+                let mut cache_core = select_cache_core(*core_flag, rx_args.cache_ring_list.len(), next_cache_core);
 
 
-            // no hit
-            if cache_core == rx_args.cache_ring_list.len() {
-                debug_log!("Rx{} No Hit L2 Hash", rx_args.id);
-                hash_calc_result.is_lbf_hit = false;
-                cache_core = next_cache_core as usize;
-            // hit
-            } else {
-                debug_log!("Rx{} Hit L2 Hash", rx_args.id);
-                hash_calc_result.is_lbf_hit = true;
+                // no hit
+                if cache_core == rx_args.cache_ring_list.len() {
+                    debug_log!("Rx{} No Hit L2 Hash", rx_args.id);
+                    hash_calc_result.is_lbf_hit = false;
+                    cache_core = next_cache_core as usize;
+                // hit
+                } else {
+                    debug_log!("Rx{} Hit L2 Hash", rx_args.id);
+                    hash_calc_result.is_lbf_hit = true;
+                }
+
+
+                debug_log!("Rx{} enqueue to Cache Core {}", rx_args.id, cache_core);
+                rx_result.hash_calc_result = hash_calc_result as *mut HashCalcResult;
+                if rx_args.cache_ring_list[cache_core].enqueue(rx_result) < 0 {
+                    debug_log!("Rx{} failed enqueue to Cache Core {}", rx_args.id, cache_core);
+                    unsafe { (*rx_result.hash_calc_result).free(); };
+                    rx_result.pktbuf.free();
+                    rx_result.free();
+                }
+                debug_log!("Rx{} complete  enqueue to Cache Core {}", rx_args.id, cache_core);
             }
-
-
-            debug_log!("Rx{} enqueue to Cache Core {}", rx_args.id, cache_core);
-            rx_result.hash_calc_result = hash_calc_result as *mut HashCalcResult;
-            if rx_args.cache_ring_list[cache_core].enqueue(rx_result) < 0 {
-                debug_log!("Rx{} failed enqueue to Cache Core {}", rx_args.id, cache_core);
-                unsafe { (*rx_result.hash_calc_result).free(); };
-                rx_result.pktbuf.free();
-                rx_result.free();
-            }
-            debug_log!("Rx{} complete  enqueue to Cache Core {}", rx_args.id, cache_core);
-
 
             next_cache_core += 1;
             if next_cache_core as usize == rx_args.cache_ring_list.len() {

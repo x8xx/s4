@@ -55,6 +55,17 @@ impl Ring {
         }
     }
 
+    pub fn dequeue_burst_resume<T>(&self, objs: &Array<&mut T>, pos: usize, len: usize) -> usize {
+        unsafe {
+            dpdk_sys::rte_ring_dequeue_burst(
+                self.ring,
+                objs.as_ptr().offset(pos as isize) as *mut *mut T as *mut *mut c_void,
+                len as u32,
+                null_mut()
+            ) as usize
+        }
+    }
+
     pub fn enqueue<T>(&self, obj: &mut T) -> i32 {
         unsafe {
             dpdk_sys::rte_ring_enqueue(

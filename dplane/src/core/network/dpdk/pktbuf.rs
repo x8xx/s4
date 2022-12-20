@@ -1,7 +1,6 @@
 use std::os::raw::c_void;
 use std::mem::transmute;
 use std::ptr::null_mut;
-use crate::core::memory::array;
 
 
 #[derive(Clone)]
@@ -10,12 +9,6 @@ pub struct PktBuf {
 }
 
 impl PktBuf {
-    pub fn new() -> Self {
-        PktBuf {
-            buf: null_mut(),
-        }
-    }
-
     pub fn get_raw_pkt(&self) -> (*mut u8, usize) {
         unsafe {
             if self.buf == null_mut() {

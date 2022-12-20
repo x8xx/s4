@@ -29,7 +29,7 @@ pub struct PipelineArgs {
     pub header_max_size: usize,
     pub buf_size: usize,
 
-    pub tx_ring_list: Array<Ring>,
+    pub tx_ring_list: Array<Array<Ring>>,
     pub cache_creater_ring: Ring,
 }
 
@@ -53,13 +53,16 @@ impl NewCacheElement {
     }
 }
 
-
-pub fn output_pkt(tx_ring_list: &Array<Ring>, pktbuf: &mut PktBuf, output: Output) -> bool {
+pub fn output_pkt(tx_ring_list: &Array<Array<Ring>>, next_tx_queue_list: &mut Array<usize>, pktbuf: &mut PktBuf, output: Output) -> bool {
     match output {
         Output::Port(port_num) => {
             debug_log!("Pipeline enqueue to Tx{}", port_num);
-            if tx_ring_list[port_num as usize].enqueue(pktbuf) < 0 {
+            if tx_ring_list[port_num as usize][next_tx_queue_list[port_num as usize]].enqueue(pktbuf) < 0 {
                 return false;
+            }
+            next_tx_queue_list[port_num as usize] += 1;
+            if next_tx_queue_list[port_num as usize] >= tx_ring_list[port_num as usize].len() {
+                next_tx_queue_list[port_num as usize] = 0;
             }
         },
         Output::All => {
@@ -67,7 +70,7 @@ pub fn output_pkt(tx_ring_list: &Array<Ring>, pktbuf: &mut PktBuf, output: Outpu
         },
         Output::Controller => {
             debug_log!("Pipeline enqueue to Tx0 (CPU)");
-            if tx_ring_list[0].enqueue(pktbuf) < 0 {
+            if tx_ring_list[0][0].enqueue(pktbuf) < 0 {
                 return false;
             }
         },
@@ -97,6 +100,8 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
     let rx_result_list = Array::<&mut RxResult>::new(pipeline_args.batch_count);
     let cache_result_list = Array::<&mut CacheResult>::new(pipeline_args.batch_count);
 
+    let mut next_tx_queue_list = Array::<usize>::new(pipeline_args.tx_ring_list.len());
+
     log!("Start Pipeline{} Core", pipeline_args.id);
     loop {
         // from rx (through cache core)
@@ -122,12 +127,12 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
             pipeline_args.pipeline.run_cache_pipeline(rx_result_list.get(i).raw_pkt, *pkt_len,  parse_result, cache_data, &mut output);
             debug_log!("Pipeline{} complete cache pipeline", pipeline_args.id);
 
-           if !output_pkt(&pipeline_args.tx_ring_list, pktbuf, output) {
+           if !output_pkt(&pipeline_args.tx_ring_list, &mut next_tx_queue_list, pktbuf, output) {
                 debug_log!("Pipeline{} drop pkt", pipeline_args.id);
                 pktbuf.free();
                 rx_result_list.get(i).free();
                 continue;
-           } 
+           }
 
            rx_result_list.get(i).free();
         }
@@ -191,7 +196,7 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
                 pipeline_args.cache_creater_ring.enqueue(new_cache_element);
             }
 
-            if !output_pkt(&pipeline_args.tx_ring_list, pktbuf, output) {
+            if !output_pkt(&pipeline_args.tx_ring_list, &mut next_tx_queue_list, pktbuf, output) {
                 debug_log!("Pipeline{} drop pkt", pipeline_args.id);
                 pktbuf.free();
                 debug_log!("Pipeline{} success pktbuf free", pipeline_args.id);

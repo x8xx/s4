@@ -28,6 +28,8 @@ pub struct SwitchConfig {
 pub struct InterfaceConfig {
     pub if_name: String,
     pub cache_core_num: u8,
+    pub rx_queue: u16,
+    pub tx_queue: u16,
 }
 
 
@@ -132,6 +134,8 @@ pub fn parse_switch_args(args: &[String]) -> SwitchConfig {
         interface_configs.push(InterfaceConfig{
             if_name: yaml_config_interface.0.clone().into_string().unwrap(),
             cache_core_num: yaml_config_interface.1.clone()["cache_core_num"].as_i64().unwrap() as u8,
+            rx_queue: yaml_config_interface.1.clone()["rx_queue"].as_i64().unwrap() as u16,
+            tx_queue: yaml_config_interface.1.clone()["tx_queue"].as_i64().unwrap() as u16,
         });
     }
 
