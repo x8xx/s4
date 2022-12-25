@@ -32,7 +32,8 @@ fn main() {
     let gen_lib_path = &pktgen_args[1];
 
     let (port_number, max_rx_queues, max_tx_queues) = dpdk::interface::Interface::init(&interface_name);
-    let max_tx_queues = 14;
+    // let max_tx_queues = 14;
+
 
     println!("Port{}: max_rx_queues {}, max_tx_queues {}", port_number, max_rx_queues, max_tx_queues);
 
@@ -80,18 +81,37 @@ fn main() {
     }
 
 
-    let rx_args = rx::RxArgs {
-        port_number,
-        max_rx_queues,
-        execution_time,
-    };
-
-    if !dpdk::thread::spawn(rx::start_rx, &rx_args as *const rx::RxArgs as *mut c_void) {
-        dpdk::common::cleanup();
-        panic!("faild start threadrx");
+    let rx_result = Vec::<u64>::with_capacity(max_rx_queues as usize);;
+    let mut rx_args_list = Vec::new();
+    for i in 0..max_rx_queues {
+        rx_args_list.push(rx::RxArgs {
+            port_number,
+            queue: i,
+            execution_time,
+            result: unsafe { (rx_result.as_ptr() as *mut u64).offset(i as isize) },
+        });
     }
 
+    // let rx_args = rx::RxArgs {
+    //     port_number,
+    //     max_rx_queues,
+    //     execution_time,
+    // };
+
+    for args in rx_args_list.iter_mut() {
+        if !dpdk::thread::spawn(rx::start_rx, args as *const rx::RxArgs as *mut c_void) {
+            dpdk::common::cleanup();
+            panic!("faild start threadrx");
+        }
+    }
 
     dpdk::thread::thread_wait();
+
+    let mut sum = 0;
+    for i in 0..rx_result.len() {
+        sum += rx_result[i];
+    }
+    println!("receive pkt count: {}", sum);
+
     dpdk::common::cleanup();
 }

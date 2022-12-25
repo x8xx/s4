@@ -22,9 +22,11 @@ impl Interface {
             (port_info.max_rx_queues, port_info.max_tx_queues)
         };
 
-        Interface::up(port_number, max_rx_queues, max_tx_queues);
+        // Interface::up(port_number, max_rx_queues, max_tx_queues);
+        Interface::up(port_number, 13, 16);
 
-        (port_number, max_rx_queues, max_tx_queues)
+        // (port_number, max_rx_queues, max_tx_queues)
+        (port_number, 13, 16)
     }
 
     fn find_interface_from_name(name: &str) -> u16 {

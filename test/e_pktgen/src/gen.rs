@@ -47,6 +47,7 @@ pub extern "C" fn start_gen(gen_args_ptr: *mut c_void) -> i32 {
         // println!("pktbuf alloc");
         if !pktbuf_pool.alloc_bulk(pktbuf_list.clone()) {
             if end_time < Instant::now() {
+                println!("gen end");
                 return 0;
             }
 
@@ -62,15 +63,17 @@ pub extern "C" fn start_gen(gen_args_ptr: *mut c_void) -> i32 {
             state = unsafe { fn_pktgen(pkt, state) };
         }
 
-         gen_args.interface.tx(&mut pktbuf_list[0], gen_args.batch_count as u16);
+        gen_args.interface.tx(&mut pktbuf_list[0], gen_args.batch_count as u16);
 
-        // c  += gen_args.interface.tx(&mut pktbuf_list[0], gen_args.batch_count as u16);
-            // println!("gen pkt {}", c);
+        c  += gen_args.interface.tx(&mut pktbuf_list[0], gen_args.batch_count as u16);
+            // println!("gen pkt {} from {}", c, gen_args.interface.queue_number);
+        // std::thread::sleep(Duration::from_millis(10));
 
         // gen_args.tx_ring.enqueue(&mut pktbuf_list);
 
 
         if end_time < Instant::now() {
+            println!("gen end");
             return 0;
         }
 
