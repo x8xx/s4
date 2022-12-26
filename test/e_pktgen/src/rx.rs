@@ -18,13 +18,7 @@ pub struct RxArgs {
 
 
 pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
-    println!("start rx thread");
     let rx_args = unsafe { &mut *transmute::<*mut c_void, *mut RxArgs>(rx_args_ptr) };
-
-    // let interface = Interface {
-    //     port_number: rx_args.port_number,
-    //     queue_number: 0,
-    // };
 
     let mut pktbuf_list = Array::<PktBuf>::new(32);
 
@@ -33,17 +27,11 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     
     let mut counter: u64 = 0;
 
-    // let mut interfaces = Array::new(rx_args.max_rx_queues as usize);
-    // for i in 0..interfaces.len() {
-    //     interfaces.init(i, Interface {
-    //         port_number: rx_args.port_number,
-    //         queue_number: i as u16,
-    //     });
-    // }
     let interface = Interface {
         port_number: rx_args.port_number,
         queue_number: rx_args.queue,
     };
+    println!("start rx thread");
     loop {
         // for i in 0..interfaces.len() {
             let pkt_count = interface.rx(&mut pktbuf_list[0], 32);
@@ -53,6 +41,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
             // let now = Instant::now();
             if end_time < Instant::now() {
+                pktbuf_list.free();
                 println!("execution time: {}", (Instant::now() - start_time).as_secs());
                 println!("{} receive pkt count: {}", rx_args.queue, counter);
                 // panic!("success");

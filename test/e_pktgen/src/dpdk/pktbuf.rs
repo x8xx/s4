@@ -63,6 +63,12 @@ impl PktbufPool {
         }
     }
 
+    pub fn free(&self) {
+        unsafe {
+            dpdk_sys::rte_mempool_free(self.mempool);
+        }
+    }
+
     pub fn alloc_bulk(&self, pktbuf_list: Array<PktBuf>) -> bool {
         unsafe {
             dpdk_sys::rte_pktmbuf_alloc_bulk(

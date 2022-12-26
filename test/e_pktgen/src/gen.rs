@@ -42,12 +42,14 @@ pub extern "C" fn start_gen(gen_args_ptr: *mut c_void) -> i32 {
 
     println!("start gen thread");
     let end_time = Instant::now() + Duration::from_secs(gen_args.execution_time + 3);
-    let mut c = 0;
+    let mut counter = 0;
     loop {
         // println!("pktbuf alloc");
         if !pktbuf_pool.alloc_bulk(pktbuf_list.clone()) {
             if end_time < Instant::now() {
-                println!("gen end");
+                println!("{} generate pkt count: {}", gen_args.interface.queue_number, counter);
+                pktbuf_pool.free();
+                pktbuf_list.free();
                 return 0;
             }
 
@@ -57,15 +59,13 @@ pub extern "C" fn start_gen(gen_args_ptr: *mut c_void) -> i32 {
         // println!("pktbuf custom");
         for i in 0..pktbuf_list.len() {
             pktbuf_list[i].append(1500);
-            c += 1;
-            // println!("check {}", c);
             let (pkt, _) = pktbuf_list[i].get_raw_pkt();
             state = unsafe { fn_pktgen(pkt, state) };
         }
 
         gen_args.interface.tx(&mut pktbuf_list[0], gen_args.batch_count as u16);
 
-        c  += gen_args.interface.tx(&mut pktbuf_list[0], gen_args.batch_count as u16);
+        counter  += gen_args.interface.tx(&mut pktbuf_list[0], gen_args.batch_count as u16);
             // println!("gen pkt {} from {}", c, gen_args.interface.queue_number);
         // std::thread::sleep(Duration::from_millis(10));
 
@@ -73,7 +73,9 @@ pub extern "C" fn start_gen(gen_args_ptr: *mut c_void) -> i32 {
 
 
         if end_time < Instant::now() {
-            println!("gen end");
+            println!("{} generate pkt count: {}", gen_args.interface.queue_number, counter);
+            pktbuf_pool.free();
+            pktbuf_list.free();
             return 0;
         }
 
