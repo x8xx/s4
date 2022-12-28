@@ -8,7 +8,7 @@ use std::slice::from_raw_parts_mut;
 use std::os::raw::c_char;
 
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Array<T> {
     data: *mut T,
     memzone: *const dpdk_sys::rte_memzone,

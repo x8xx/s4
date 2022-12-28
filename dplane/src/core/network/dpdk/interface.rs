@@ -65,8 +65,16 @@ impl Interface {
             for i in 0..max_rx_queues {
                 let mempool = dpdk_sys::rte_pktmbuf_pool_create(
                     crate::core::helper::dpdk::gen_random_name() .as_ptr() as *mut c_char,
+                    // number of elements
                     8192,
-                    256,
+                    // 65536,
+                    // 262144,
+
+                    // number of cache elements
+                    0,
+                    // 256,
+                    // 512,
+
                     0,
                     dpdk_sys::RTE_MBUF_DEFAULT_BUF_SIZE.try_into().unwrap(),
                     dpdk_sys::rte_socket_id().try_into().unwrap()

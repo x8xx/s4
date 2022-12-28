@@ -61,6 +61,10 @@ impl Ring {
         // }.try_into().unwrap()
     }
 
+    pub fn dequeue_burst_resume<T>(&self, objs: &Array<&mut T>, pos: usize, len: usize) -> usize {
+        0
+    }
+
     pub fn enqueue<T>(&self, obj: &mut T) -> usize {
         0
         // unsafe {

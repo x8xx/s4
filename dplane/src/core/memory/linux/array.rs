@@ -7,7 +7,7 @@ use std::slice::from_raw_parts_mut;
 use std::ffi::c_void;
 
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Array<T> {
     data: *mut T,
     len: usize,
