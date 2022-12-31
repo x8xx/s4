@@ -57,7 +57,7 @@ impl<T: Copy> Vector<T> {
                 std::ptr::write::<T>(self.data.offset((*self.meta).pos as isize), value);
             } else {
                 let new_len = (*self.meta).len + (*self.meta).extend_size;
-                let new_data = libc::malloc(new_len) as *mut T;
+                let new_data = libc::malloc(new_len * size_of::<T>()) as *mut T;
                 for i in 0..(*self.meta).len {
                     *new_data.offset(i as isize) = *self.data.offset(i as isize);
                 }

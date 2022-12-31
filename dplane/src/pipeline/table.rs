@@ -1,9 +1,11 @@
 use crate::config::DpConfigTable;
+use crate::core::logger::log::*;
 use crate::core::memory::array::Array;
 use crate::parser::header::Header;
 use crate::parser::parse_result::ParseResult;
 use crate::cache::cache::CacheRelation;
-
+use crate::pipeline::tree::radix_tree::RadixTree;
+use crate::pipeline::tree::avl_tree::AvlTree;
 
 type HeaderID = usize;
 type FieldID= usize;
@@ -14,15 +16,22 @@ pub enum MatchKind {
     Lpm,
 }
 
+pub enum Tree {
+    Radix(RadixTree),
+    Avl(AvlTree),
+}
+
 pub struct Table {
-    pub entries: Array<FlowEntry>,
+    // pub entries: Array<FlowEntry>,
+    pub tree: Tree,
+    pub tree_key_index: usize,
     pub keys: Array<(MatchField, MatchKind)>,
-    // default_action: ActionSet,
     pub default_entry: FlowEntry,
-    pub len: usize,
+    // pub len: usize,
     pub header_list: Array<Header>,
 }
 
+#[derive(Clone, Copy)]
 pub struct FlowEntry {
     pub values: Array<MatchFieldValue>,
     pub priority: u8,
@@ -30,13 +39,14 @@ pub struct FlowEntry {
     // pub cache_relation: Option<CacheRelation>,
 }
 
+#[derive(Clone, Copy)]
 pub struct MatchFieldValue {
     pub value: Option<Array<u8>>,
     pub prefix_mask: u8,
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct ActionSet {
     pub action_id: u8,
     pub action_data: Array<i32>,
@@ -57,6 +67,11 @@ impl Table {
         };
 
 
+        let mut tree = if table_conf.keys[0].match_kind == "lpm" {
+            Tree::Radix(RadixTree::new(0))
+        } else {
+            Tree::Avl(AvlTree::new(0))
+        };
         for (i, key) in table_conf.keys.iter().enumerate() {
             let match_field = (key.header_id as usize, key.field_id as usize);
             let match_kind = if key.match_kind == "lpm" {
@@ -69,20 +84,48 @@ impl Table {
                 value: None,
                 prefix_mask: 0,
             });
+
+            if i == table_conf.tree_key_index {
+                tree = if table_conf.keys[i].match_kind == "lpm" {
+                    Tree::Radix(RadixTree::new(i))
+                } else {
+                    Tree::Avl(AvlTree::new(i))
+                };
+            }
         } 
 
 
         Table {
-            entries: Array::new(table_conf.max_size as usize),
+            // entries: Array::new(table_conf.max_size as usize),
+            tree,
+            tree_key_index: table_conf.tree_key_index,
             keys,
             default_entry,
-            len: 0,
+            // len: 0,
             header_list,
         }
     }
 
 
     pub fn search(&self, pkt: *const u8, parse_result: &ParseResult) -> &FlowEntry {
+        let entries = {
+            let header_id = self.keys[self.tree_key_index].0.0;
+            let field_id = self.keys[self.tree_key_index].0.1;
+            let field = self.header_list[header_id].fields[field_id];
+
+            let field_offset = parse_result.header_list[header_id].offset as usize + field.start_byte_pos;
+            let field_len = field.end_byte_pos - field.start_byte_pos + 1;
+            match &self.tree {
+                Tree::Radix(tree) => {
+                    tree.search(unsafe { pkt.offset(field_offset as isize) }, field_len)
+                },
+                Tree::Avl(tree) => {
+                    tree.search(unsafe { pkt.offset(field_offset as isize) }, field_len)
+                }
+            }
+        };
+
+
         fn lpm_check(new_entry: &MatchFieldValue, old_entry: &MatchFieldValue) -> bool {
             // new: any, old: value => false
             if new_entry.value.is_none() && !old_entry.value.is_none() {
@@ -121,26 +164,31 @@ impl Table {
         let mut result_entry = &self.default_entry;
 
         // search all entry
-        for i in 0..self.len {
+        for i in 0..entries.len() {
             let mut success_match_count = 0;
 
             // check all key
             for j in 0..self.keys.len() {
+                // skip tree key
+                if self.tree_key_index == j {
+                    continue;
+                }
+
                 let match_field = self.keys[j].0;
                 let match_kind = &self.keys[j].1;
 
                 // any check
-                let value = match &self.entries[i].values[j].value {
-                    Some(value) => value,
+                let value = match &entries[i].values[j].value {
+                    Some(value) => {
+                        // debug_log!("SearchTable not any");
+                        value
+                    },
                     // any
                     None => {
                         if let MatchKind::Lpm = match_kind {
-                            if !lpm_check(&self.entries[i].values[j], &result_entry.values[j]) {
+                            if !lpm_check(&entries[i].values[j], &result_entry.values[j]) {
                                 break;
                             }
-                            // if !result_entry.values[j].value.is_none() {
-                            //     break;
-                            // }
                         }
                         success_match_count += 1;
                         continue;
@@ -153,7 +201,7 @@ impl Table {
                     pkt,
                     parse_result.header_list[match_field.0].offset,
                     value,
-                    self.entries[i].values[j].prefix_mask
+                    entries[i].values[j].prefix_mask
                 );
                 if !match_result {
                     break;
@@ -162,7 +210,7 @@ impl Table {
 
                 // lpm check
                 if let MatchKind::Lpm = match_kind {
-                    if !lpm_check(&self.entries[i].values[j], &result_entry.values[j]) {
+                    if !lpm_check(&entries[i].values[j], &result_entry.values[j]) {
                         break;
                     }
                 }
@@ -170,14 +218,14 @@ impl Table {
                 success_match_count += 1;
             }
 
-            if success_match_count != self.keys.len() {
+            if success_match_count != (self.keys.len() - 1) {
                 continue;
             }
 
 
             // priority check
-            if result_entry.priority <= self.entries[i].priority {
-                result_entry = &self.entries[i];
+            if result_entry.priority <= entries[i].priority {
+                result_entry = &entries[i];
             }
         }
 
@@ -187,8 +235,14 @@ impl Table {
 
 
     pub fn insert(&mut self, entry: FlowEntry) {
-        self.entries[self.len] = entry;
-        self.len += 1;
+        match &mut self.tree {
+            Tree::Radix(tree) => {
+                tree.add(entry);
+            },
+            Tree::Avl(tree) => {
+                tree.add(entry);
+            },
+        }
     }
 
 
@@ -201,6 +255,7 @@ impl Table {
 #[cfg(test)]
 mod tests {
     use super::Table;
+    // use super::Tree;
     use super::FlowEntry;
     use super::ActionSet;
     use super::MatchFieldValue;
@@ -317,7 +372,31 @@ mod tests {
         }
 
 
-        let entries_len = 2;
+        for i in 2..500 {
+            {
+                let index = i;
+                entries.init(index, FlowEntry {
+                    values: Array::new(entry_value_len),
+                    priority: 0,
+                    action: ActionSet {
+                        action_id: 10,
+                        action_data: Array::new(0),
+                    }
+                });
+                entries[index].values.init(0, MatchFieldValue {
+                    value: None,
+                    prefix_mask: 0xff,
+                });
+                // any
+                entries[index].values.init(1, MatchFieldValue {
+                    value: None,
+                    prefix_mask: 0xff,
+                });
+            }
+        }
+
+        let entries_len = 500;
+        // let entries_len = 2;
         (entries, entries_len)
     }
 
@@ -329,14 +408,18 @@ mod tests {
 
         let mut table_conf = DpConfigTable {
             keys: get_dp_config_table_key_1(),
+            tree_key_index: 0,
             default_action_id: 0,
             max_size: 10000,
         };
 
         let mut table = Table::new(&table_conf, header_list.clone());
         let (entries, entries_len) = get_entries_1();
-        table.entries = entries;
-        table.len = entries_len;
+        for i in 0..entries_len {
+            table.insert(entries[i]);
+        }
+        // table.entries = entries;
+        // table.len = entries_len;
 
 
         let mut parse_result = parse_result::ParseResult {
@@ -379,7 +462,7 @@ mod tests {
 
         pkt[5] = 0x07;
         flow_entry = table.search(pkt.as_ptr(), &parse_result);
-        assert_eq!(flow_entry.action.action_id, 0);
+        assert_eq!(flow_entry.action.action_id, 10);
     }
 
 }

@@ -37,12 +37,12 @@ impl RadixTree {
     }
 
 
-    pub fn search(&self, pkt: *mut u8, len: isize) -> &Vector<FlowEntry> {
+    pub fn search(&self, pkt: *const u8, len: usize) -> &Vector<FlowEntry> {
         let mut entries = None;
         let mut node = self.root;
 
         unsafe {
-            for i in 0..len {
+            for i in 0..len as isize {
                 for j in 0..8 {
                     let flag = 1 << (7 - j);
                     if (*pkt.offset(i) & flag) == flag {

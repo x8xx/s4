@@ -26,31 +26,31 @@ struct Node {
 
 impl AvlTree {
     pub fn new(key_index: usize) -> Self {
-        let mut nodes = Vector::new(65535, 65535);
-        nodes.push(Node {
-            parent: null_mut(),
-            left: null_mut(),
-            right: null_mut(),
-            entries: Vector::new(0, 255),
-            value: Array::new(0),
-            height: 0,
-        });
+        let nodes = Vector::new(65535, 65535);
+        // nodes.push(Node {
+        //     parent: null_mut(),
+        //     left: null_mut(),
+        //     right: null_mut(),
+        //     entries: Vector::new(0, 255),
+        //     value: Array::new(0),
+        //     height: 0,
+        // });
 
         AvlTree {
-            root: &mut nodes[0] as *mut Node,
+            root: null_mut(),
             nodes,
             any_entries: Vector::new(255, 255),
             key_index,
         }
     }
 
-
-    pub fn search(&self, pkt: *mut u8, len: isize) -> &Vector<FlowEntry> {
+    
+    pub fn search(&self, pkt: *const u8, len: usize) -> &Vector<FlowEntry> {
         let mut node = self.root;
         unsafe {
             loop {
                 let mut is_equal = true;
-                for i in 0..len {
+                for i in 0..len as isize {
                     if *pkt.offset(i) > (*node).value[i as usize] {
                         if (*node).right == null_mut() {
                             return &self.any_entries;
@@ -76,29 +76,53 @@ impl AvlTree {
     }
 
 
-    pub fn init_root(&mut self, entry: FlowEntry) -> bool {
-        let value = entry.values[self.key_index].value;
-        if value.is_none() {
-            return false;
-        }
-        let value = value.unwrap();
-        self.nodes.push(Node {
-            parent: null_mut(),
-            left: null_mut(),
-            right: null_mut(),
-            entries: Vector::new(255, 255),
-            value,
-            height: 0,
-        });
-        self.root = self.nodes.last() as *mut Node;
-        unsafe {
-            (*self.root).entries.push(entry);
-        }
-        true
-    }
+    // pub fn init_root(&mut self, entry: FlowEntry) -> bool {
+    //     let value = entry.values[self.key_index].value;
+    //     if value.is_none() {
+    //         return false;
+    //     }
+    //     let value = value.unwrap();
+    //     self.nodes.push(Node {
+    //         parent: null_mut(),
+    //         left: null_mut(),
+    //         right: null_mut(),
+    //         entries: Vector::new(255, 255),
+    //         value,
+    //         height: 0,
+    //     });
+    //     self.root = self.nodes.last() as *mut Node;
+    //     unsafe {
+    //         (*self.root).entries.push(entry);
+    //     }
+    //     true
+    // }
 
     
     pub fn add(&mut self, entry: FlowEntry) {
+        if self.root == null_mut() {
+            let value = entry.values[self.key_index].value;
+            if value.is_none() {
+                self.any_entries.push(entry);
+            } else {
+                let value = value.unwrap();
+
+                self.nodes.push(Node {
+                    parent: null_mut(),
+                    left: null_mut(),
+                    right: null_mut(),
+                    entries: Vector::new(255, 255),
+                    value,
+                    height: 0,
+                });
+                self.root = self.nodes.last() as *mut Node;
+                unsafe {
+                    (*self.root).entries.push(entry);
+                }
+            }
+            return;
+        }
+
+
         fn add(tree: &mut AvlTree, entry: FlowEntry) -> Option<*mut Node> {
             let value = entry.values[tree.key_index].value;
             if value.is_none() {
@@ -229,18 +253,8 @@ mod tests {
         tree.add(entry);
         assert_eq!(tree.any_entries.len(), 2);
 
-        // init root node
-        let mut entry = FlowEntry {
-            values: Array::new(1),
-            priority: 0,
-            action: action_set,
-        };
-        entry.values[0] = MatchFieldValue {
-            value: None,
-            prefix_mask: 0x00, 
-        };
-        assert!(!tree.init_root(entry));
 
+        // 0x80, 0x10, 0
         let action_set = ActionSet {
             action_id: 1,
             action_data: Array::new(0),
@@ -257,7 +271,8 @@ mod tests {
         entry.values[0].value.unwrap().init(0, 0x80);
         entry.values[0].value.unwrap().init(1, 0x10);
         entry.values[0].value.unwrap().init(2, 0);
-        assert!(tree.init_root(entry));
+        // assert!(tree.init_root(entry));
+        tree.add(entry);
 
 
         // init pkt

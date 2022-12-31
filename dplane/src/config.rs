@@ -54,6 +54,7 @@ pub struct DpConfigHeader {
 #[derive(Deserialize)]
 pub struct DpConfigTable {
     pub keys: Vec<DpConfigTableKey>,
+    pub tree_key_index: usize,
     pub default_action_id: u64,
     pub max_size: u64,
 }

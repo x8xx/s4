@@ -115,6 +115,7 @@ mod tests {
 
         let mut table_conf = DpConfigTable {
             keys: Vec::new(),
+            tree_key_index: 0,
             default_action_id: 0,
             max_size: 10000,
         };
