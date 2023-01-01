@@ -14,10 +14,10 @@ pub struct Vector<T> {
     meta: *mut VectorMeta,
 }
 
-struct VectorMeta {
-    pos: usize,
-    len: usize,
-    extend_size: usize, 
+pub struct VectorMeta {
+    pub pos: usize,
+    pub len: usize,
+    pub extend_size: usize, 
 }
 
 unsafe impl<T> Send for Vector<T> {}
@@ -44,6 +44,14 @@ impl<T: Copy> Vector<T> {
             
 
 
+        Vector {
+            data,
+            meta,
+        }
+    }
+
+
+    pub fn new_manual(data: *mut T, meta: *mut VectorMeta) -> Self {
         Vector {
             data,
             meta,

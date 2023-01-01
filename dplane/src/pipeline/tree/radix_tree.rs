@@ -1,5 +1,6 @@
 use std::marker::Copy;
 use std::ptr::null_mut;
+use crate::core::memory::heap::Heap;
 use crate::core::memory::vector::Vector;
 use crate::pipeline::table::FlowEntry;
 
@@ -9,6 +10,7 @@ pub struct RadixTree {
     nodes: Vector<Node>,
     any_entries: Vector<FlowEntry>,
     key_index: usize,
+    heap: Heap,
 }
 
 #[derive(Clone, Copy)]
@@ -33,6 +35,7 @@ impl RadixTree {
             nodes,
             any_entries: Vector::new(255, 255),
             key_index,
+            heap: Heap::new(536870912),
         }
     }
 

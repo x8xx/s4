@@ -1,23 +1,25 @@
 use std::marker::Copy;
 use std::ptr::null_mut;
+use crate::core::memory::heap::Heap;
 use crate::core::memory::array::Array;
 use crate::core::memory::vector::Vector;
 use crate::pipeline::table::FlowEntry;
 
 
 pub struct AvlTree {
-    root: *mut Node,
+    root: Option<usize>,
     nodes: Vector<Node>,
     any_entries: Vector<FlowEntry>,
     key_index: usize,
+    heap: Heap,
 }
 
 
 #[derive(Clone, Copy)]
 struct Node {
-    parent: *mut Node,
-    left: *mut Node,
-    right: *mut Node,
+    parent: Option<usize>,
+    left: Option<usize>,
+    right: Option<usize>,
     entries: Vector<FlowEntry>,
     value:  Array<u8>,
     height: u64,
@@ -27,79 +29,49 @@ struct Node {
 impl AvlTree {
     pub fn new(key_index: usize) -> Self {
         let nodes = Vector::new(65535, 65535);
-        // nodes.push(Node {
-        //     parent: null_mut(),
-        //     left: null_mut(),
-        //     right: null_mut(),
-        //     entries: Vector::new(0, 255),
-        //     value: Array::new(0),
-        //     height: 0,
-        // });
 
         AvlTree {
-            root: null_mut(),
+            root: None,
             nodes,
             any_entries: Vector::new(255, 255),
             key_index,
+            heap: Heap::new(536870912),
         }
     }
 
     
     pub fn search(&self, pkt: *const u8, len: usize) -> &Vector<FlowEntry> {
-        let mut node = self.root;
-        unsafe {
-            loop {
-                let mut is_equal = true;
-                for i in 0..len as isize {
-                    if *pkt.offset(i) > (*node).value[i as usize] {
-                        if (*node).right == null_mut() {
-                            return &self.any_entries;
-                        }
-                        is_equal = false;
-                        node = (*node).right;
-                        break;
-                    } else if *pkt.offset(i)  < (*node).value[i as usize] {
-                        if (*node).left == null_mut() {
-                            return &self.any_entries;
-                        }
-                        is_equal = false;
-                        node = (*node).left;
-                        break;
-                    }
-                }
+        let mut node = &self.nodes[self.root.unwrap()];
 
-                if is_equal {
-                    return &(*node).entries;
+        loop {
+            let mut is_equal = true;
+            for i in 0..len as isize {
+                if unsafe { *pkt.offset(i) } > node.value[i as usize] {
+                    if node.right.is_none() {
+                        return &self.any_entries;
+                    }
+                    is_equal = false;
+                    node = &self.nodes[node.right.unwrap()];
+                    break;
+                } else if unsafe { *pkt.offset(i) } < node.value[i as usize] {
+                    if node.left.is_none() {
+                        return &self.any_entries;
+                    }
+                    is_equal = false;
+                    node = &self.nodes[node.left.unwrap()];
+                    break;
                 }
+            }
+
+            if is_equal {
+                return &node.entries;
             }
         }
     }
 
 
-    // pub fn init_root(&mut self, entry: FlowEntry) -> bool {
-    //     let value = entry.values[self.key_index].value;
-    //     if value.is_none() {
-    //         return false;
-    //     }
-    //     let value = value.unwrap();
-    //     self.nodes.push(Node {
-    //         parent: null_mut(),
-    //         left: null_mut(),
-    //         right: null_mut(),
-    //         entries: Vector::new(255, 255),
-    //         value,
-    //         height: 0,
-    //     });
-    //     self.root = self.nodes.last() as *mut Node;
-    //     unsafe {
-    //         (*self.root).entries.push(entry);
-    //     }
-    //     true
-    // }
-
-    
     pub fn add(&mut self, entry: FlowEntry) {
-        if self.root == null_mut() {
+        if self.root.is_none() {
             let value = entry.values[self.key_index].value;
             if value.is_none() {
                 self.any_entries.push(entry);
@@ -107,23 +79,22 @@ impl AvlTree {
                 let value = value.unwrap();
 
                 self.nodes.push(Node {
-                    parent: null_mut(),
-                    left: null_mut(),
-                    right: null_mut(),
-                    entries: Vector::new(255, 255),
+                    parent: None,
+                    left: None,
+                    right: None,
+                    // entries: Vector::new(255, 255),
+                    entries: self.heap.vec_malloc(16, 32),
                     value,
                     height: 0,
                 });
-                self.root = self.nodes.last() as *mut Node;
-                unsafe {
-                    (*self.root).entries.push(entry);
-                }
+                self.root = Some(self.nodes.len() - 1);
+                self.nodes[self.root.unwrap()].entries.push(entry);
             }
             return;
         }
 
 
-        fn add(tree: &mut AvlTree, entry: FlowEntry) -> Option<*mut Node> {
+        fn add(tree: &mut AvlTree, entry: FlowEntry) -> Option<&Node> {
             let value = entry.values[tree.key_index].value;
             if value.is_none() {
                 tree.any_entries.push(entry);
@@ -131,54 +102,57 @@ impl AvlTree {
             }
             let value = value.unwrap();
 
-
-            let mut node = tree.root;
+            let nodes_ptr = &mut tree.nodes as *mut Vector<Node>;
 
             unsafe {
-                loop {
-                    let node_value = (*node).entries[0].values[tree.key_index].value.unwrap();
-                    let mut is_equal = true;
+                let mut node = (*nodes_ptr).get(tree.root.unwrap());
 
+                loop {
+                    let node_value = node.entries[0].values[tree.key_index].value.unwrap();
+                    let mut is_equal = true;
+                    
                     for i in 0..value.len() {
                         if value[i] > node_value[i] {
-                            if (*node).right == null_mut() {
+                            if node.right.is_none() {
                                 tree.nodes.push(Node {
-                                    parent: null_mut(),
-                                    left: null_mut(),
-                                    right: null_mut(),
-                                    entries: Vector::new(255, 255),
+                                    parent: None,
+                                    left: None,
+                                    right: None,
+                                    // entries: Vector::new(255, 255),
+                                    entries: tree.heap.vec_malloc(16, 32),
                                     value,
-                                    height: (*node).height + 1,
+                                    height: node.height + 1,
                                 });
-                                (*node).right = tree.nodes.last() as *mut Node;
-                                (*(*node).right).entries.push(entry);
-                                return Some((*node).right);
+                                node.right = Some(tree.nodes.len() - 1);
+                                (*nodes_ptr).get(node.right.unwrap()).entries.push(entry);
+                                return Some(&tree.nodes[node.right.unwrap()]);
                             }
                             is_equal = false;
-                            node = (*node).right;
+                            node = (*nodes_ptr).get(node.right.unwrap());
                             break;
                         } else if value[i] < node_value[i] {
-                            if (*node).left == null_mut() {
+                            if node.left.is_none() {
                                 tree.nodes.push(Node {
-                                    parent: null_mut(),
-                                    left: null_mut(),
-                                    right: null_mut(),
-                                    entries: Vector::new(255, 255),
+                                    parent: None,
+                                    left: None,
+                                    right: None,
+                                    // entries: Vector::new(255, 255),
+                                    entries: tree.heap.vec_malloc(16, 32),
                                     value,
-                                    height: (*node).height + 1,
+                                    height: node.height + 1,
                                 });
-                                (*node).left = tree.nodes.last() as *mut Node;
-                                (*(*node).left).entries.push(entry);
-                                return Some((*node).left);
+                                node.left = Some(tree.nodes.len() - 1);
+                                tree.nodes[node.left.unwrap()].entries.push(entry);
+                                return Some(&tree.nodes[node.left.unwrap()]);
                             }
                             is_equal = false;
-                            node = (*node).left;
+                            node = (*nodes_ptr).get(node.left.unwrap());
                             break;
                         }
                     }
 
                     if is_equal {
-                        (*node).entries.push(entry);
+                        node.entries.push(entry);
                         return None;
                     }
                 }

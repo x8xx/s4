@@ -15,10 +15,10 @@ pub struct Vector<T> {
     meta_memzone: *const dpdk_sys::rte_memzone,
 }
 
-struct VectorMeta {
-    pos: usize,
-    len: usize,
-    extend_size: usize, 
+pub struct VectorMeta {
+    pub pos: usize,
+    pub len: usize,
+    pub extend_size: usize, 
 }
 
 unsafe impl<T> Send for Vector<T> {}
@@ -72,6 +72,16 @@ impl<T: Copy> Vector<T> {
     }
 
 
+    pub fn new_manual(data: *mut T, meta: *mut VectorMeta) -> Self {
+        Vector {
+            data,
+            data_memzone: null_mut(),
+            meta,
+            meta_memzone: null_mut(),
+        }
+    }
+
+
     pub fn push(&mut self, value: T) {
         unsafe {
             if (*self.meta).pos < (*self.meta).len {
@@ -89,8 +99,9 @@ impl<T: Copy> Vector<T> {
                     *new_data.offset(i as isize) = *self.data.offset(i as isize);
                 }
 
-
-                dpdk_sys::rte_memzone_free(self.data_memzone);
+                if self.data_memzone != null_mut() {
+                    dpdk_sys::rte_memzone_free(self.data_memzone);
+                }
 
                 self.data = new_data;
                 self.data_memzone = new_memzone;
@@ -161,7 +172,7 @@ impl<T: Copy> Vector<T> {
 impl<T> Index<usize> for Vector<T> {
     type Output = T;
 
-    fn index(&self, i: usize) ->  &Self::Output {
+    fn index(&self, i: usize) ->  &T {
         unsafe {
             &*self.data.offset(i as isize)
         }
