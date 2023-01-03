@@ -18,6 +18,7 @@ use crate::cache::cache::CacheElement;
 use crate::cache::cache::CacheData;
 use crate::cache::hash::l1_hash_function_murmurhash3;
 use crate::cache::hash::l2_hash_function_murmurhash3;
+// use crate::cache::hash::l2_hash_function_murmurhash3_2;
 
 use std::time::Duration;
 use std::time::Instant;
@@ -140,7 +141,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             //     panic!("end {}", count);
             // }
             count += 1;
-            println!("count : {}", count);
+            // println!("count : {}", count);
             rx_args.interface.debug_show_info();
 
             debug_log!("Rx{} rx_result malloc", rx_args.id);
@@ -221,6 +222,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             debug_log!("Rx{} check LBF", rx_args.id);
             debug_log!("Rx{} create L2 Key", rx_args.id);
             let parsed_header_list = &rx_result.parse_result.header_list;
+
             let l2_key_ptr = hash_calc_result.l2_key.as_ptr();
             let mut l2_key_next_offset = 0;
             for j in 0..parsed_header_list.len() {
@@ -244,9 +246,11 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 }
             }
             hash_calc_result.l2_key_len = l2_key_next_offset as u8;
+
             debug_log!("Rx{} done L2 Key", rx_args.id);
 
             let l2_hash = l2_hash_function_murmurhash3(l2_key_ptr, hash_calc_result.l2_key_len as usize, rx_args.l2_hash_seed);
+            // let l2_hash = l2_hash_function_murmurhash3_2(pkt, rx_args.l2_hash_seed, &rx_args.header_list, &rx_result.parse_result.header_list);
             hash_calc_result.l2_hash = l2_hash;
 
             {
