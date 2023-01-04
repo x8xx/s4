@@ -57,8 +57,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         let mut flow_entry_heap = Heap::new(entry_sum_size as usize);
         let entry_count: u32 = ((initial_table_data[7] as u32) << 24) + ((initial_table_data[6] as u32) << 16) + ((initial_table_data[5] as u32) << 8) + initial_table_data[4] as u32;
         let mut pos = 8;
-        for i in 0..entry_count as usize {
-
+        for _ in 0..entry_count as usize {
             let table_id = initial_table_data[pos];
             pos += 1;
             let entry_buf_size = ((initial_table_data[pos + 1] as u16) << 8) + initial_table_data[pos] as u16;
@@ -79,11 +78,25 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let mut l3_cache = TupleSpace::new(10000, 417);
 
 
-    let rx_batch_count = 64;
-    let cache_batch_count = 64;
-    let pipeline_batch_count = 64;
-    let tx_batch_count = 64;
+    // let rx_batch_count = 64;
+    // let cache_batch_count = 64;
+    // let pipeline_batch_count = 64;
+    // let tx_batch_count = 64;
+    //
+    let rx_batch_count = 8192;
+    let cache_batch_count = 8192;
+    let pipeline_batch_count = 8192;
+    let tx_batch_count = 8192;
 
+
+    // let pktbuf_size = 4096;
+    // let cache_ring_buf_size = 4096;
+    // let cache_ring_size = 4096;
+    // let new_cache_buf_size = 4096;
+    // let pipeline_ring_size = 4096;
+    // let tx_ring_size = 4096;
+    // let cache_creater_ring_size = 4096;
+    //
     // let pktbuf_size = 8192;
     // let cache_ring_buf_size = 8192;
     // let cache_ring_size = 8192;
@@ -123,18 +136,18 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     // to pipeline ring list
     // pipeline_args_list
     let mut pipeline_ring_from_rx_list = Array::<ring::Ring>::new(switch_config.pipeline_core_num as usize);
-    let mut pipeline_ring_from_cache_list = Array::<ring::Ring>::new(switch_config.pipeline_core_num as usize);
+    // let mut pipeline_ring_from_cache_list = Array::<ring::Ring>::new(switch_config.pipeline_core_num as usize);
     let mut pipeline_args_list = Array::<worker::pipeline::PipelineArgs>::new(switch_config.pipeline_core_num as usize);
 
     for i in 0..pipeline_args_list.len() {
         pipeline_ring_from_rx_list.init(i, ring::Ring::new(pipeline_ring_size));
-        pipeline_ring_from_cache_list.init(i, ring::Ring::new(pipeline_ring_size));
+        // pipeline_ring_from_cache_list.init(i, ring::Ring::new(pipeline_ring_size));
 
         pipeline_args_list.init(i, worker::pipeline::PipelineArgs {
             id: i,
             pipeline: Pipeline::new(&switch_config.pipeline_wasm, table_list.clone()),
             ring_from_rx: pipeline_ring_from_rx_list[i].clone(),
-            ring_from_cache: pipeline_ring_from_cache_list[i].clone(),
+            // ring_from_cache: pipeline_ring_from_cache_list[i].clone(),
             batch_count: pipeline_batch_count,
             table_list_len: table_list.len(),
             header_max_size,
@@ -180,7 +193,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
                 l2_cache: l2_cache_list[i][j].clone(),
                 l3_cache: &l3_cache,
                 // l3_cache,
-                pipeline_ring_list: pipeline_ring_from_cache_list.clone(),
+                pipeline_ring_list: pipeline_ring_from_rx_list.clone(),
             });
             cache_args_count += 1;
         }

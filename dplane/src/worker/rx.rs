@@ -1,6 +1,7 @@
 use std::ffi::c_void;
 use std::mem::transmute;
 use std::sync::RwLock;
+use std::ptr::null_mut;
 use crate::core::logger::log::log;
 use crate::core::logger::log::debug_log;
 use crate::core::memory::ring::Ring;
@@ -51,7 +52,8 @@ pub struct RxResult {
     pub owner_ring: *mut RingBuf<RxResult>,
 
     // to cache and pipeline
-    pub id: usize,
+    pub rx_id: usize,
+    pub cache_id: usize,
 
     pub pktbuf: PktBuf,
     pub raw_pkt: *mut u8,
@@ -59,6 +61,7 @@ pub struct RxResult {
 
     pub parse_result: ParseResult,
     pub cache_data: CacheData,
+    pub is_cache_hit: bool,
 
     // to cache core
     pub hash_calc_result: *mut HashCalcResult, 
@@ -66,8 +69,8 @@ pub struct RxResult {
 
 impl RxResult {
     pub fn free(&mut self) {
-        // self.pktbuf.free();
         unsafe {
+            debug_log!("free addr-------------------------- {}", self as *mut RxResult as u64);
             (*self.owner_ring).free(self);
         }
     }
@@ -104,7 +107,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     {
         let rx_result_array = malloc_ringbuf_all_element!(rx_result_ring_buf, RxResult);
         for (_, rx_result) in rx_result_array.as_slice().iter_mut().enumerate() {
-            rx_result.id = rx_args.id;
+            rx_result.rx_id = rx_args.id;
             rx_result.owner_ring = &mut rx_result_ring_buf as *mut RingBuf<RxResult>;
 
             rx_result.parse_result.metadata = heap.malloc(1); 
@@ -140,13 +143,16 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             // if end_time < Instant::now() {
             //     panic!("end {}", count);
             // }
-            count += 1;
-            // println!("count : {}", count);
-            rx_args.interface.debug_show_info();
+            {
+                count += 1;
+                debug_log!("pkt count {}", count);
+            }
+            // rx_args.interface.debug_show_info();
 
             debug_log!("Rx{} rx_result malloc", rx_args.id);
             let rx_result = rx_result_ring_buf.malloc();
             debug_log!("Rx{} done rx_result malloc", rx_args.id);
+
 
             debug_log!("Rx{} get raw pkt", rx_args.id);
             rx_result.pktbuf = pktbuf_list.get(i).clone();
@@ -158,11 +164,11 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             }
             debug_log!("Rx{} done get raw pkt", rx_args.id);
 
-            unsafe {
-                debug_log!("Rx{} dst_mac_addr {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", rx_args.id,  *pkt.offset(0),*pkt.offset(1),*pkt.offset(2),*pkt.offset(3),*pkt.offset(4),*pkt.offset(5));
-                // println!("{:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(6),*pkt.offset(7),*pkt.offset(8),*pkt.offset(9),*pkt.offset(10),*pkt.offset(11));
-                // println!("{:x} {:x}", *pkt.offset(12),*pkt.offset(13));
-            }
+            // unsafe {
+            //     debug_log!("Rx{} dst_mac_addr {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", rx_args.id,  *pkt.offset(0),*pkt.offset(1),*pkt.offset(2),*pkt.offset(3),*pkt.offset(4),*pkt.offset(5));
+            //     println!("{:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(6),*pkt.offset(7),*pkt.offset(8),*pkt.offset(9),*pkt.offset(10),*pkt.offset(11));
+            //     println!("{:x} {:x}", *pkt.offset(12),*pkt.offset(13));
+            // }
 
 
             debug_log!("Rx{} start pkt parse", rx_args.id);
@@ -180,9 +186,10 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
             rx_result.raw_pkt = pkt;
             rx_result.pktbuf = pktbuf_list[i].clone();
-            
 
             // l1_cache
+            rx_result.is_cache_hit = false;
+            rx_result.hash_calc_result = null_mut();
             debug_log!("Rx{} check L1 Cache", rx_args.id);
             let l1_hash = l1_hash_function_murmurhash3(pkt, rx_result.parse_result.hdr_size, rx_args.l1_hash_seed);
             debug_log!("Rx{} check L1 Cache l1_hash{}", rx_args.id, l1_hash);
@@ -192,6 +199,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                     debug_log!("Rx{} Hit L1 Cache", rx_args.id);
                     debug_log!("Rx{} debug1", rx_args.id);
                     rx_result.cache_data = cache_element.data.clone();
+                    rx_result.is_cache_hit = true;
                     debug_log!("Rx{} debug2", rx_args.id);
                     if rx_args.pipeline_ring_list[next_pipeline_core].enqueue(rx_result) < 0 {
                         debug_log!("Rx{} failed enqueue to Pipeline Core {}", rx_args.id, next_pipeline_core);

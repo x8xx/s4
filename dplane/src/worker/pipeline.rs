@@ -1,5 +1,6 @@
 use std::ffi::c_void;
 use std::mem::transmute;
+use std::ptr::null_mut;
 use crate::core::logger::log::log;
 use crate::core::logger::log::debug_log;
 use crate::core::memory::heap::Heap;
@@ -14,7 +15,7 @@ use crate::pipeline::pipeline::Pipeline;
 use crate::pipeline::output::Output;
 use crate::worker::rx::RxResult;
 use crate::worker::rx::HashCalcResult;
-use crate::worker::cache::CacheResult;
+// use crate::worker::cache::CacheResult;
 
 
 #[repr(C)]
@@ -22,7 +23,7 @@ pub struct PipelineArgs {
     pub id: usize,
     pub pipeline: Pipeline,
     pub ring_from_rx: Ring,
-    pub ring_from_cache: Ring,
+    // pub ring_from_cache: Ring,
 
     pub batch_count: usize,
     pub table_list_len: usize,
@@ -98,80 +99,39 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
 
 
     let rx_result_list = Array::<&mut RxResult>::new(pipeline_args.batch_count);
-    let cache_result_list = Array::<&mut CacheResult>::new(pipeline_args.batch_count);
+    // let cache_result_list = Array::<&mut CacheResult>::new(pipeline_args.batch_count);
 
     let mut next_tx_queue_list = Array::<usize>::new(pipeline_args.tx_ring_list.len());
 
     log!("Start Pipeline{} Core", pipeline_args.id);
     loop {
-        // from rx (through cache core)
         let rx_result_dequeue_count = pipeline_args.ring_from_rx.dequeue_burst::<RxResult>(&rx_result_list, pipeline_args.batch_count);
         for i in 0..rx_result_dequeue_count {
             debug_log!("Pipeline{} dequeue rx_result", pipeline_args.id);
 
-            let rx_result = rx_result_list.get(i);
-
+            // let rx_result = rx_result_list.get(i);
             let RxResult {
                 owner_ring: _,
-                id: _,
-                pktbuf,
-                raw_pkt: _,
-                pkt_len,
-                parse_result,
-                cache_data,
-                hash_calc_result: _,
-            } = rx_result_list.get(i);
-
-            debug_log!("Pipeline{} run cache pipeline", pipeline_args.id);
-            let mut output = Output::Drop;
-            pipeline_args.pipeline.run_cache_pipeline(rx_result_list.get(i).raw_pkt, *pkt_len,  parse_result, cache_data, &mut output);
-            debug_log!("Pipeline{} complete cache pipeline", pipeline_args.id);
-
-           if !output_pkt(&pipeline_args.tx_ring_list, &mut next_tx_queue_list, pktbuf, output) {
-                debug_log!("Pipeline{} drop pkt", pipeline_args.id);
-                pktbuf.free();
-                rx_result_list.get(i).free();
-                continue;
-           }
-
-           rx_result_list.get(i).free();
-        }
-
-
-        // // from cache
-        let cache_result_dequeue_count = pipeline_args.ring_from_cache.dequeue_burst::<CacheResult>(&cache_result_list, pipeline_args.batch_count);
-        for i in 0..cache_result_dequeue_count {
-            debug_log!("Pipeline{} dequeue cache_result", pipeline_args.id);
-
-            let CacheResult {
-                owner_ring: _,
-                rx_result,
-                id: ref cache_id,
-                is_cache_hit,
-                cache_data, 
-            } = cache_result_list.get(i);
-
-            let RxResult {
-                owner_ring: _,
-                id: ref rx_id,
+                rx_id,
+                cache_id,
                 pktbuf,
                 raw_pkt,
                 pkt_len,
                 parse_result,
-                cache_data: _,
+                cache_data,
+                is_cache_hit,
                 hash_calc_result,
-            } = unsafe { &mut **rx_result };
+            } = rx_result_list.get(i);
 
             let mut output = Output::Drop;
-
-            // cache
             if *is_cache_hit {
                 debug_log!("Pipeline{} run cache pipeline", pipeline_args.id);
-                pipeline_args.pipeline.run_cache_pipeline(*raw_pkt, *pkt_len, parse_result, cache_data, &mut output);
+                pipeline_args.pipeline.run_cache_pipeline(rx_result_list.get(i).raw_pkt, *pkt_len,  parse_result, cache_data, &mut output);
                 debug_log!("Pipeline{} complete cache pipeline", pipeline_args.id);
-                cache_result_list.get(i).free();
-                unsafe { (**hash_calc_result).free() };
-            // no cache
+
+                if *hash_calc_result != null_mut() {
+                    unsafe { (**hash_calc_result).free() };
+                }
             } else {
                 debug_log!("Pipeline{} new_cache_element malloc", pipeline_args.id);
                 let new_cache_element = new_cache_element_ringbuf.malloc();
@@ -199,14 +159,82 @@ pub extern "C" fn start_pipeline(pipeline_args_ptr: *mut c_void) -> i32 {
             if !output_pkt(&pipeline_args.tx_ring_list, &mut next_tx_queue_list, pktbuf, output) {
                 debug_log!("Pipeline{} drop pkt", pipeline_args.id);
                 pktbuf.free();
-                debug_log!("Pipeline{} success pktbuf free", pipeline_args.id);
-                cache_result_list.get(i).free();
-                debug_log!("Pipeline{} success rx_result free", pipeline_args.id);
                 continue;
             } 
 
-            cache_result_list.get(i).free();
+            rx_result_list.get(i).free();
         }
+
+
+        // // from cache
+        // let cache_result_dequeue_count = pipeline_args.ring_from_cache.dequeue_burst::<CacheResult>(&cache_result_list, pipeline_args.batch_count);
+        // for i in 0..cache_result_dequeue_count {
+        //     debug_log!("Pipeline{} dequeue cache_result", pipeline_args.id);
+
+        //     let CacheResult {
+        //         owner_ring: _,
+        //         rx_result,
+        //         id: ref cache_id,
+        //         is_cache_hit,
+        //         cache_data, 
+        //     } = cache_result_list.get(i);
+
+        //     let RxResult {
+        //         owner_ring: _,
+        //         id: ref rx_id,
+        //         pktbuf,
+        //         raw_pkt,
+        //         pkt_len,
+        //         parse_result,
+        //         cache_data: _,
+        //         hash_calc_result,
+        //     } = unsafe { &mut **rx_result };
+
+        //     let mut output = Output::Drop;
+
+        //     // cache
+        //     if *is_cache_hit {
+        //         debug_log!("Pipeline{} run cache pipeline", pipeline_args.id);
+        //         pipeline_args.pipeline.run_cache_pipeline(*raw_pkt, *pkt_len, parse_result, cache_data, &mut output);
+        //         debug_log!("Pipeline{} complete cache pipeline", pipeline_args.id);
+        //         cache_result_list.get(i).free();
+        //         unsafe { (**hash_calc_result).free() };
+        //     // no cache
+        //     } else {
+        //         debug_log!("Pipeline{} new_cache_element malloc", pipeline_args.id);
+        //         let new_cache_element = new_cache_element_ringbuf.malloc();
+        //         debug_log!("Pipeline{} done new_cache_elementmalloc", pipeline_args.id);
+
+        //         debug_log!("Pipeline{} run pipeline", pipeline_args.id);
+        //         pipeline_args.pipeline.run_pipeline(*raw_pkt, *pkt_len, parse_result, &mut new_cache_element.cache_data, &mut output);
+        //         debug_log!("Pipeline{} complete pipeline", pipeline_args.id);
+
+        //         new_cache_element.l1_key_len = parse_result.hdr_size;
+        //         for i in 0..new_cache_element.l1_key_len {
+        //             unsafe {
+        //                 new_cache_element.l1_key[i] = *raw_pkt.offset(i as isize);
+        //             }
+        //         }
+        //         new_cache_element.rx_id = *rx_id;
+        //         new_cache_element.cache_id = *cache_id;
+        //         new_cache_element.hash_calc_result = *hash_calc_result as *const HashCalcResult as *mut HashCalcResult;
+
+        //         debug_log!("Pipeline{} enqueue to cache_creater_ring", pipeline_args.id);
+        //         // to cache_creater (main core)
+        //         pipeline_args.cache_creater_ring.enqueue(new_cache_element);
+        //     }
+
+        //     if !output_pkt(&pipeline_args.tx_ring_list, &mut next_tx_queue_list, pktbuf, output) {
+        //         debug_log!("Pipeline{} drop pkt", pipeline_args.id);
+        //         pktbuf.free();
+        //         debug_log!("Pipeline{} success pktbuf free", pipeline_args.id);
+        //         cache_result_list.get(i).free();
+        //         debug_log!("Pipeline{} success rx_result free", pipeline_args.id);
+        //         continue;
+        //     } 
+
+        //     cache_result_list.get(i).free();
+        // }
 
         if false {
             return 0;
