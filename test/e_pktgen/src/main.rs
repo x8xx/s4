@@ -1,9 +1,6 @@
-mod method;
-mod header;
-mod gen;
 mod dpdk;
-mod tx;
-mod rx;
+mod mode;
+// mod tx;
 
 
 use std::io::stdin;
@@ -50,63 +47,118 @@ fn main() {
         stdout().flush().unwrap();
         stdin().read_line(&mut cmd_str).unwrap();
         cmd_str = cmd_str.trim_right().to_owned();
+        let mut cmd_spw = cmd_str.split_whitespace();
+        let mode = cmd_spw.next();
+        let arg = cmd_spw.next();
 
-        if cmd_str == "exit" {
+        if mode.is_none() {
+            continue;
+        }
+        let mode = mode.unwrap();
+
+        if mode == "exit" {
             break;
         }
+        
 
-        let execution_time: u64 = cmd_str.parse().unwrap();
+        if mode == "t" {
+            if arg.is_none() {
+                continue;
+            }
+            let arg = arg.unwrap();
+            let execution_time: u64 = arg.parse().unwrap();
 
-        let mut gen_args_list = Vec::new();
-        for i in 0..max_tx_queues {
-            gen_args_list.push(gen::GenArgs {
-                tap_name: tap_name.clone(),
+
+            let mut gen_args_list = Vec::new();
+            for i in 0..max_tx_queues {
+                gen_args_list.push(mode::time::gen::GenArgs {
+                    batch_count: 32,
+                    execution_time,
+                    gen_lib_path: gen_lib_path.to_string(),
+                    interface: dpdk::interface::Interface {
+                        port_number,
+                        queue_number: i as u16,
+                    },
+                });
+            }
+
+            for args in gen_args_list.iter_mut() {
+                if !dpdk::thread::spawn(mode::time::gen::start_gen, args as *mut mode::time::gen::GenArgs as *mut c_void) {
+                    dpdk::common::cleanup();
+                    panic!("faild start thread gen");
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+
+            std::thread::sleep(std::time::Duration::from_secs(1));
+
+            let rx_result = Vec::<u64>::with_capacity(max_rx_queues as usize);
+            let mut rx_args_list = Vec::new();
+            for i in 0..max_rx_queues {
+                rx_args_list.push(mode::time::rx::RxArgs {
+                    port_number,
+                    queue: i,
+                    execution_time,
+                    result: unsafe { rx_result.as_ptr().cast_mut().offset(i as isize) },
+                });
+            }
+
+            for args in rx_args_list.iter_mut() {
+                if !dpdk::thread::spawn(mode::time::rx::start_rx, args as *const mode::time::rx::RxArgs as *mut c_void) {
+                    dpdk::common::cleanup();
+                    panic!("faild start threadrx");
+                }
+            }
+
+            dpdk::thread::thread_wait();
+
+            let mut sum = 0;
+            for i in 0..rx_result.len() {
+                sum += rx_result[i];
+            }
+            println!("receive pkt count: {}", sum);
+        } else if mode == "c" {
+            if arg.is_none() {
+                continue;
+            }
+            let arg = arg.unwrap();
+            let execution_time: u64 = arg.parse().unwrap();
+
+            let arg = cmd_spw.next();
+            if arg.is_none() {
+                continue;
+            }
+            let arg = arg.unwrap();
+            let gen_count: u64 = arg.parse().unwrap();
+
+            let mut gen_args = mode::count::gen::GenArgs {
                 batch_count: 32,
-                execution_time,
+                gen_count,
                 gen_lib_path: gen_lib_path.to_string(),
                 interface: dpdk::interface::Interface {
                     port_number,
-                    queue_number: i as u16,
+                    queue_number: 0 as u16,
                 },
-            });
-        }
+            };
 
-        for args in gen_args_list.iter_mut() {
-            if !dpdk::thread::spawn(gen::start_gen, args as *mut gen::GenArgs as *mut c_void) {
+            if !dpdk::thread::spawn(mode::count::gen::start_gen, &mut gen_args as *mut mode::count::gen::GenArgs as *mut c_void) {
                 dpdk::common::cleanup();
                 panic!("faild start thread gen");
             }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
 
-        std::thread::sleep(std::time::Duration::from_secs(1));
 
-        let rx_result = Vec::<u64>::with_capacity(max_rx_queues as usize);
-        let mut rx_args_list = Vec::new();
-        for i in 0..max_rx_queues {
-            rx_args_list.push(rx::RxArgs {
+            let mut rx_args = mode::count::rx::RxArgs {
                 port_number,
-                queue: i,
+                queue: 0,
                 execution_time,
-                result: unsafe { rx_result.as_ptr().cast_mut().offset(i as isize) },
-            });
-        }
+            };
 
-        for args in rx_args_list.iter_mut() {
-            if !dpdk::thread::spawn(rx::start_rx, args as *const rx::RxArgs as *mut c_void) {
+            if !dpdk::thread::spawn(mode::count::rx::start_rx, &mut rx_args as *mut mode::count::rx::RxArgs as *mut c_void) {
                 dpdk::common::cleanup();
                 panic!("faild start threadrx");
             }
+            dpdk::thread::thread_wait();
         }
-
-        dpdk::thread::thread_wait();
-
-        let mut sum = 0;
-        for i in 0..rx_result.len() {
-            sum += rx_result[i];
-        }
-        println!("receive pkt count: {}", sum);
-
     }
 
     dpdk::common::cleanup();
