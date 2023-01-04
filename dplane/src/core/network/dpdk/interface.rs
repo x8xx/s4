@@ -55,7 +55,9 @@ impl Interface {
 
     fn up(port: u16, max_rx_queues: u16, max_tx_queues: u16) {
         unsafe {
-            let port_conf: dpdk_sys::rte_eth_conf = Default::default();
+            let mut port_conf: dpdk_sys::rte_eth_conf = Default::default();
+            // port_conf.rxmode.mq_mode = dpdk_sys::rte_eth_rx_mq_mode_RTE_ETH_MQ_RX_RSS;
+
             if dpdk_sys::rte_eth_dev_configure(port, max_rx_queues, max_tx_queues, &port_conf as *const _) < 0 {
                 panic!("Cannot configure device\n");
             }
@@ -66,14 +68,14 @@ impl Interface {
                 let mempool = dpdk_sys::rte_pktmbuf_pool_create(
                     crate::core::helper::dpdk::gen_random_name() .as_ptr() as *mut c_char,
                     // number of elements
-                    8192,
+                    // 8192,
                     // 65536,
-                    // 262144,
+                    262144,
 
                     // number of cache elements
-                    0,
+                    // 0,
                     // 256,
-                    // 512,
+                    512,
 
                     0,
                     dpdk_sys::RTE_MBUF_DEFAULT_BUF_SIZE.try_into().unwrap(),
@@ -81,12 +83,14 @@ impl Interface {
                 );
 
                 if dpdk_sys::rte_eth_rx_queue_setup(port, i, 1024, dev_socket_id, null_mut(), mempool) < 0 {
+                // if dpdk_sys::rte_eth_rx_queue_setup(port, i, 32768, dev_socket_id, null_mut(), mempool) < 0 {
                     panic!("Error rte_eth_rx_queue_setup Port{} Queue{}\n", port, i);
                 }
             }
 
             for i in 0..max_tx_queues {
                 if dpdk_sys::rte_eth_tx_queue_setup(port, i, 1024, dev_socket_id, null_mut()) < 0 {
+                // if dpdk_sys::rte_eth_tx_queue_setup(port, i, 32768, dev_socket_id, null_mut()) < 0 {
                     panic!("Error rte_eth_tx_queue_setup Port{} Queue{}\n", port, i);
                 }
             }

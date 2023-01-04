@@ -105,7 +105,8 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     // let tx_ring_size = 8192;
     // let cache_creater_ring_size = 8192;
     //
-    let pktbuf_size = 16777216;
+    // let pktbuf_size = 16777216;
+    let pktbuf_size = 65536;
     let cache_ring_buf_size = 65536;
     let cache_ring_size = 65536;
     let new_cache_buf_size = 65536;
