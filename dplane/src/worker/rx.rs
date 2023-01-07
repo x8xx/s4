@@ -70,7 +70,7 @@ pub struct RxResult {
 impl RxResult {
     pub fn free(&mut self) {
         unsafe {
-            debug_log!("free addr-------------------------- {}", self as *mut RxResult as u64);
+            debug_log!("Free RxResult {}", self as *mut RxResult as u64);
             (*self.owner_ring).free(self);
         }
     }
@@ -89,6 +89,7 @@ pub struct HashCalcResult {
 impl HashCalcResult {
     pub fn free(&mut self) {
         unsafe {
+            debug_log!("Free HashCalcResult {}", self as *mut HashCalcResult as u64);
             (*self.owner_ring).free(self);
         }
     }
@@ -128,6 +129,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     });
     debug_log!("Rx{} done init hash_calc_result_ring_buf", rx_args.id);
 
+
     let mut next_pipeline_core = 0;
     let mut next_cache_core = 0;
     let mut pktbuf_list = Array::<PktBuf>::new(rx_args.batch_count);
@@ -137,7 +139,7 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     log!("Start Rx{} Core - Port {} Queue {}", rx_args.id, rx_args.interface.port, rx_args.interface.queue);
     let end_time = Instant::now() + Duration::from_secs(5);
     loop {
-        let pkt_count = rx_args.interface.rx(&mut pktbuf_list[0], rx_args.batch_count);
+        let pkt_count = rx_args.interface.rx(&pktbuf_list, rx_args.batch_count);
         // debug_log!("pkt_count {}", pkt_count);
         for i in 0..pkt_count as usize {
             // if end_time < Instant::now() {
@@ -165,9 +167,9 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             debug_log!("Rx{} done get raw pkt", rx_args.id);
 
             // unsafe {
-            //     debug_log!("Rx{} dst_mac_addr {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", rx_args.id,  *pkt.offset(0),*pkt.offset(1),*pkt.offset(2),*pkt.offset(3),*pkt.offset(4),*pkt.offset(5));
-            //     println!("{:x}:{:x}:{:x}:{:x}:{:x}:{:x}", *pkt.offset(6),*pkt.offset(7),*pkt.offset(8),*pkt.offset(9),*pkt.offset(10),*pkt.offset(11));
-            //     println!("{:x} {:x}", *pkt.offset(12),*pkt.offset(13));
+            //     println!("Rx{} dst_mac_addr {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", rx_args.id,  *pkt.offset(0),*pkt.offset(1),*pkt.offset(2),*pkt.offset(3),*pkt.offset(4),*pkt.offset(5));
+            //     println!("Rx{} {:x}:{:x}:{:x}:{:x}:{:x}:{:x}", rx_args.id, *pkt.offset(6),*pkt.offset(7),*pkt.offset(8),*pkt.offset(9),*pkt.offset(10),*pkt.offset(11));
+            //     println!("Rx{} {:x} {:x}", rx_args.id, *pkt.offset(12),*pkt.offset(13));
             // }
 
 

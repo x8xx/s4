@@ -58,7 +58,7 @@ pub fn output_pkt(tx_ring_list: &Array<Array<Ring>>, next_tx_queue_list: &mut Ar
     match output {
         Output::Port(port_num) => {
             debug_log!("Pipeline enqueue to Tx{}", port_num);
-            if tx_ring_list[port_num as usize][next_tx_queue_list[port_num as usize]].enqueue(pktbuf) < 0 {
+            if tx_ring_list[port_num as usize][next_tx_queue_list[port_num as usize]].enqueue(pktbuf.as_raw()) < 0 {
                 return false;
             }
             next_tx_queue_list[port_num as usize] += 1;
@@ -71,9 +71,9 @@ pub fn output_pkt(tx_ring_list: &Array<Array<Ring>>, next_tx_queue_list: &mut Ar
         },
         Output::Controller => {
             debug_log!("Pipeline enqueue to Tx0 (CPU)");
-            if tx_ring_list[0][0].enqueue(pktbuf) < 0 {
-                return false;
-            }
+            // if tx_ring_list[0][0].enqueue(pktbuf.as_raw()) < 0 {
+            //     return false;
+            // }
         },
         Output::Drop => {
             return false;

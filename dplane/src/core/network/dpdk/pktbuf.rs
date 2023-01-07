@@ -2,6 +2,7 @@ use std::os::raw::c_void;
 use std::mem::transmute;
 use std::ptr::null_mut;
 
+pub type RawPktBuf = dpdk_sys::rte_mbuf;
 
 #[derive(Clone)]
 pub struct PktBuf {
@@ -18,6 +19,12 @@ impl PktBuf {
             let len = (*self.buf).data_len;
             let offset = (*self.buf).data_off;
             (pkt.offset(offset.try_into().unwrap()), len as usize)
+        }
+    }
+
+    pub fn as_raw(&mut self) ->  &mut RawPktBuf {
+        unsafe {
+            &mut *self.buf
         }
     }
 

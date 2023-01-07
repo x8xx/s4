@@ -1,7 +1,7 @@
 use std::ffi::CStr;
 use std::ptr::null_mut;
 use std::os::raw::c_char;
-
+use crate::core::memory::array::Array;
 use crate::core::network::pktbuf;
 
 
@@ -57,6 +57,7 @@ impl Interface {
         unsafe {
             let mut port_conf: dpdk_sys::rte_eth_conf = Default::default();
             // port_conf.rxmode.mq_mode = dpdk_sys::rte_eth_rx_mq_mode_RTE_ETH_MQ_RX_RSS;
+            // port_conf.rx_adv_conf.rss_conf.rss_hf =  0x180d34;
 
             if dpdk_sys::rte_eth_dev_configure(port, max_rx_queues, max_tx_queues, &port_conf as *const _) < 0 {
                 panic!("Cannot configure device\n");
@@ -175,25 +176,24 @@ impl Interface {
         // }
     }
 
-    pub fn rx(&self, pktbuf: &mut pktbuf::PktBuf, len: usize) -> u16 {
+    pub fn rx(&self, pktbuf: &Array<pktbuf::PktBuf>, len: usize) -> u16 {
         unsafe {
             // dpdk_sys::rte_eth_rx_burst(self.port, 0, pktbuf.as_ptr(),  pktbuf.len() as u16);
             dpdk_sys::rte_eth_rx_burst(
                 self.port,
                 self.queue,
-                pktbuf as *mut pktbuf::PktBuf as *mut *mut dpdk_sys::rte_mbuf,
+                pktbuf.as_ptr() as *mut pktbuf::PktBuf as *mut *mut dpdk_sys::rte_mbuf,
                 len as u16
             )
         }
     }
 
-    pub fn tx(&self, pktbuf: &mut pktbuf::PktBuf, len: usize) -> u16 {
+    pub fn tx(&self, pktbuf: &Array<&mut pktbuf::RawPktBuf>, len: usize) -> u16 {
         unsafe {
-            // dpdk_sys::rte_eth_tx_burst(self.port, 0, pktbuf.as_ptr(),  pktbuf.pkt_count as u16);
             dpdk_sys::rte_eth_tx_burst(
                 self.port,
                 self.queue,
-                pktbuf as *mut pktbuf::PktBuf as *mut *mut dpdk_sys::rte_mbuf,
+                pktbuf.as_ptr() as *mut &mut pktbuf::RawPktBuf as *mut *mut dpdk_sys::rte_mbuf,
                 len as u16
             )
         }
