@@ -1,6 +1,8 @@
 use std::os::raw::c_void;
 use std::mem::transmute;
 use std::ptr::null_mut;
+use crate::core::logger::log::log;
+use crate::core::logger::log::debug_log;
 
 pub type RawPktBuf = dpdk_sys::rte_mbuf;
 
@@ -30,6 +32,7 @@ impl PktBuf {
 
     pub fn free(&self) {
         unsafe {
+            debug_log!("Pktbuf Free {:x}", self.buf as i64);
             dpdk_sys::rte_pktmbuf_free(self.buf);
         }
     }

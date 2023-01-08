@@ -14,7 +14,7 @@ use crate::cache::tss::TupleSpace;
 // use crate::cache::cache::CacheData;
 use crate::pipeline::table;
 use crate::pipeline::table::Table;
-use crate::worker::pipeline::NewCacheElement;
+use crate::worker::rx::PktAnalysisResult;
 
 
 #[repr(C)]
@@ -34,93 +34,103 @@ pub extern "C" fn start_cache_creater(args_ptr: *mut c_void) -> i32 {
     let CacheCreaterArgs { ring, header_list, table_list, l1_cache_list, lbf_list, l2_cache_list } = args;
 
 
-    let new_cache_list = Array::<&mut NewCacheElement>::new(32);
+    let pkt_analysis_result_list = Array::<&mut PktAnalysisResult>::new(32);
     loop {
-        let new_cache_dequeue_count = ring.dequeue_burst::<NewCacheElement>(&new_cache_list, 32);
-        for i in 0..new_cache_dequeue_count {
+        let dequeue_count = ring.dequeue_burst::<PktAnalysisResult>(&pkt_analysis_result_list, 32);
+        for i in 0..dequeue_count {
             debug_log!("CacheCreater create cache...");
-            let new_cache = new_cache_list.get(i);
-            let hash_calc_result = unsafe { &mut *new_cache.hash_calc_result };
+            let pkt_analysis_result = pkt_analysis_result_list.get(i);
+            // let pkt_analysis_result = unsafe { &mut *pkt_analysis_result.pkt_analysis_result };
 
             // L1 Cache
             debug_log!("CacheCreater create L1 Cache");
             {
-                // let mut l1_cache = l1_cache_list[new_cache.rx_id][hash_calc_result.l1_hash as usize].write().unwrap();
-                let mut l1_cache = l1_cache_list[new_cache.rx_id][hash_calc_result.l1_hash as usize].write().expect("l1 cahche panic");
-                l1_cache.key_len = new_cache.l1_key_len as isize;
-                new_cache.l1_key.deepcopy(&mut l1_cache.key);
-                new_cache.cache_data.deepcopy(&mut l1_cache.data);
+                let mut l1_cache = l1_cache_list[pkt_analysis_result.rx_id][pkt_analysis_result.l1_hash as usize].write().unwrap();
+                l1_cache.key_len = pkt_analysis_result.l1_key_len as isize;
+                pkt_analysis_result.l1_key.deepcopy(&mut l1_cache.key);
+                pkt_analysis_result.cache_data.deepcopy(&mut l1_cache.data);
             }
-            debug_log!("CacheCreater DONE create L1 Cache hash:{}", hash_calc_result.l1_hash);
+            debug_log!("CacheCreater DONE create L1 Cache hash:{}", pkt_analysis_result.l1_hash);
 
 
             // L2 Cache
             debug_log!("CacheCreater create L2 Cache");
             {
-                let mut l2_cache = l2_cache_list[new_cache.rx_id][new_cache.cache_id][hash_calc_result.l2_hash as usize].write().unwrap();
-                // println!("L2 Hash: {}", hash_calc_result.l2_hash);
-                l2_cache.key_len = hash_calc_result.l2_key_len as isize;
-                hash_calc_result.l2_key.deepcopy(&mut l2_cache.key);
-                new_cache.cache_data.deepcopy(&mut l2_cache.data);
+                let mut l2_cache = l2_cache_list[pkt_analysis_result.rx_id][pkt_analysis_result.cache_id][pkt_analysis_result.l2_hash as usize].write().unwrap();
+                // println!("L2 Hash: {}", pkt_analysis_result.l2_hash);
+                l2_cache.key_len = pkt_analysis_result.l2_key_len as isize;
+                pkt_analysis_result.l2_key.deepcopy(&mut l2_cache.key);
+                pkt_analysis_result.cache_data.deepcopy(&mut l2_cache.data);
             }
-            debug_log!("CacheCreater DONE create L2 Cache id:{} hash:{}", new_cache.cache_id,  hash_calc_result.l2_hash);
+            debug_log!("CacheCreater DONE create L2 Cache id:{} hash:{}", pkt_analysis_result.cache_id,  pkt_analysis_result.l2_hash);
 
 
             // LBF
             debug_log!("CacheCreater flag up in LBF");
             {
-                let mut core_flag = lbf_list[new_cache.rx_id][hash_calc_result.l2_hash as usize].write().unwrap();
-                *core_flag |= 1 << new_cache.cache_id;
+                let mut core_flag = lbf_list[pkt_analysis_result.rx_id][pkt_analysis_result.l2_hash as usize].write().unwrap();
+                *core_flag |= 1 << pkt_analysis_result.cache_id;
             }
             debug_log!("CacheCreater DONE flag up in LBF");
 
 
             // L3 Cache
-            // {
-            //     let parsed_header = unsafe { (*(new_cache.parse_result)).header_list };
-            //     let entries= new_cache.cache_data;
-            //     let tuple_fields = Vec::new();
+            {
+                // let parsed_header = unsafe { (*(pkt_analysis_result.parse_result)).header_list };
+                // let entries = pkt_analysis_result.cache_data;
+                // let tuple_fields = Vec::new();
 
-            //     // j = table_id
-            //     for j in 0..entries.len() {
-            //         // entry null check
-            //         let entry = unsafe { 
-            //             if entries[j] == null() {
-            //                 continue
-            //             }
-            //             &*entries[j]
-            //         };
+                // // j = table_id
+                // for j in 0..entries.len() {
+                //     // entry null check
+                //     // entry != null -> used table
+                //     let entry = unsafe { 
+                //         if entries[j] == null() {
+                //             continue
+                //         }
+                //         &*entries[j]
+                //     };
                     
-            //         let table = table_list[j].read().unwrap();
+                //     let table = table_list[j].read().unwrap();
                     
-            //         // k = entry_id
-            //         for k in 0..table.keys.len() {
-            //             // (table::MatchField(HeaderID, FieldID), MatchKind(Exact, Lpm))
-            //             let match_field = table.keys[k];
+                //     // k = key_id
+                //     for k in 0..table.keys.len() {
+                //         // Type (table::MatchField(HeaderID, FieldID), MatchKind(Exact, Lpm))
+                //         let match_field = table.keys[k];
 
-            //             let field = header_list[table.keys[k].0.0 as usize].fields[table.keys[k].0.1 as usize].clone();
-            //             field.start_byte_pos += parsed_header[j].offset as usize;
-            //             field.end_byte_pos += parsed_header[j].offset as usize;
+                //         let field = header_list[match_field.0.0 as usize].fields[match_field.0.1 as usize].clone();
+                //         field.start_byte_pos += parsed_header[j].offset as usize;
+                //         field.end_byte_pos += parsed_header[j].offset as usize;
 
-            //             // value
+                //         // value
+                //         match match_field.1 {
+                //             table::MatchKind::Exact => {
+                //                 let start = Array::new(0);
+                //                 let end = Array::new(0);
+                //                 tuple_fields.push((tss::MatchKind::Exact(start, end), field));
+                //             },
+                //             table::MatchKind::Lpm => {
+                //                 match entry.values[k].value {
+                //                     Some(value) => {
+                //                         let len = value.len();
+                //                         let end_byte_mask = entry.values[k].prefix_mask;
+                //                         tuple_fields.push((tss::MatchKind::Lpm(len, end_byte_mask), field));
+                //                     },
+                //                     // any
+                //                     None => {},
+                //                 }
+                //             },
+                //         }
+                //     }
+
+                //     // tuple hash
+                // }
+
+            }
 
 
-            //             match match_field.1 {
-            //                 table::MatchKind::Exact => {
-            //                     tuple_fields.push((tss::MatchKind::Exact(), field));
-            //                 },
-            //                 table::MatchKind::Lpm => {
-            //                     tuple_fields.push((tss::MatchKind::Lpm, field));
-            //                 },
-            //             }
-            //         }
-            //     }
-
-            // }
-
-
-            hash_calc_result.free();
-            new_cache.free();
+            // pkt_analysis_result.free();
+            pkt_analysis_result.free();
 
             debug_log!("CacheCreater cosmplete insert to cache");
         }

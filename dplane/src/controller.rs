@@ -1,7 +1,7 @@
 mod cmd;
 mod cp_stream;
 mod table_controller;
-mod cache_controller;
+// mod cache_controller;
 mod to_cpu;
 
 use std::thread;
@@ -86,7 +86,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     let rx_batch_count = 8192;
     let cache_batch_count = 8192;
     let pipeline_batch_count = 8192;
-    let tx_batch_count = 8192;
+    let tx_batch_count = 16;
 
 
     // let pktbuf_size = 4096;
@@ -105,8 +105,11 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     // let tx_ring_size = 8192;
     // let cache_creater_ring_size = 8192;
     //
-    // let pktbuf_size = 16777216;
-    let pktbuf_size = 65536;
+    let pktbuf_size = 16777216;
+    // let pktbuf_size = 262144;
+    // let pktbuf_size = 65536;
+    // let pktbuf_size = 8192;
+    // let pktbuf_size = 1024;
     let cache_ring_buf_size = 65536;
     let cache_ring_size = 65536;
     let new_cache_buf_size = 65536;
@@ -150,9 +153,9 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             ring_from_rx: pipeline_ring_from_rx_list[i].clone(),
             // ring_from_cache: pipeline_ring_from_cache_list[i].clone(),
             batch_count: pipeline_batch_count,
-            table_list_len: table_list.len(),
-            header_max_size,
-            buf_size: new_cache_buf_size,
+            // table_list_len: table_list.len(),
+            // header_max_size,
+            // buf_size: new_cache_buf_size,
             tx_ring_list: tx_ring_list.clone(),
             cache_creater_ring: cache_creater_ring.clone(),
         });
@@ -224,6 +227,8 @@ pub fn start_controller(switch_config: &SwitchConfig) {
                 },
                 parser: parser::Parser::new(&switch_config.parser_wasm),
                 batch_count: rx_batch_count,
+                table_list_len: table_list.len(),
+                header_max_size,
                 pktbuf_size,
                 l1_hash_seed: 417,
                 l2_hash_seed: 417,
@@ -250,7 +255,6 @@ pub fn start_controller(switch_config: &SwitchConfig) {
                 },
                 ring: tx_ring_list[i + 1][j as usize].clone(),
                 batch_count: tx_batch_count,
-                pkt_tx_batch_count: 32,
             });
         }
     }

@@ -2,6 +2,7 @@
 
 use crate::core::memory::array::Array;
 
+pub type RawPktBuf = Array<u8>;
 
 #[derive(Clone)]
 pub struct PktBuf {
@@ -23,6 +24,10 @@ impl PktBuf {
         //     let offset = (*self.buf).data_off;
         //     (pkt.offset(offset.try_into().unwrap()), len as usize)
         // }
+    }
+
+    pub fn as_raw(&mut self) -> &mut Array<u8> {
+        &mut self.buf
     }
 
     pub fn free(&self) {

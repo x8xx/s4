@@ -2,6 +2,7 @@
 // use std::ptr::null_mut;
 // use std::os::raw::c_char;
 use std::mem::size_of;
+use crate::core::memory::array::Array;
 use crate::core::network::pktbuf;
 use pnet::datalink;
 use pnet::datalink::NetworkInterface;
@@ -62,7 +63,7 @@ impl Interface {
 
     // TODO
 
-    pub fn rx(&self, pktbuf: &mut pktbuf::PktBuf, len: usize) -> u16 {
+    pub fn rx(&self, pktbuf: &Array<pktbuf::PktBuf>, len: usize) -> u16 {
         0
         // unsafe {
         //     // dpdk_sys::rte_eth_rx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.len() as u16);
@@ -75,7 +76,7 @@ impl Interface {
         // }
     }
 
-    pub fn tx(&self, pktbuf: &mut pktbuf::PktBuf, len: usize) -> u16 {
+    pub fn tx(&self, pktbuf: &Array<&mut pktbuf::RawPktBuf>, len: usize) -> u16 {
         0
         // unsafe {
         //     // dpdk_sys::rte_eth_tx_burst(self.port_number, 0, pktbuf.as_ptr(),  pktbuf.pkt_count as u16);

@@ -1,18 +1,15 @@
 use std::ffi::c_void;
 use std::mem::transmute;
-use std::sync::Arc;
 use std::sync::RwLock;
 use crate::core::logger::log::log;
 use crate::core::logger::log::debug_log;
 use crate::core::memory::ring::Ring;
-use crate::core::memory::ring::RingBuf;
-use crate::core::memory::ring::init_ringbuf_element;
 use crate::core::memory::array::Array;
 use crate::cache::cache::CacheElement;
 use crate::cache::cache::CacheData;
 use crate::cache::tss::TupleSpace;
 use crate::cache::tss::KeyStore;
-use crate::worker::rx::RxResult;
+use crate::worker::rx::Pkt;
 // use crate::worker::rx::HashCalcResult;
 
 
@@ -35,23 +32,6 @@ pub struct CacheArgs<'a> {
 }
 
 
-// pub struct CacheResult {
-//     pub owner_ring: *mut RingBuf<CacheResult>,
-//     pub id: usize,
-//     pub rx_result: *mut RxResult,
-//     pub cache_data: CacheData,
-//     pub is_cache_hit: bool,
-// }
-
-// impl CacheResult {
-//     pub fn free(&mut self) {
-//         unsafe {
-//             (*self.owner_ring).free(self);
-//         }
-//     }
-// }
-
-
 fn next_core(mut current_core: usize, core_limit: usize) -> usize {
     current_core += 1;
     if current_core == core_limit {
@@ -65,15 +45,8 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
     let cache_args = unsafe { &mut *transmute::<*mut c_void, *mut CacheArgs>(cache_args_ptr) };
     log!("Init Cache{} Core", cache_args.id);
 
-    // init ringbuf
-    // let mut cache_result_ring_buf = RingBuf::<CacheResult>::new(cache_args.buf_size);
-    // init_ringbuf_element!(cache_result_ring_buf, CacheResult, {
-    //     id => cache_args.id,
-    //     owner_ring => &mut cache_result_ring_buf as *mut RingBuf<CacheResult>,
-    // });
+    let pkt_list = Array::<&mut Pkt>::new(cache_args.batch_count);
 
-
-    let rx_result_list = Array::<&mut RxResult>::new(cache_args.batch_count);
     let mut next_pipeline_core = 0;
     let mut tss_key_store = KeyStore {
         key: Array::new(cache_args.header_max_size),
@@ -82,38 +55,33 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
 
     log!("Start Cache{} Core", cache_args.id);
     loop {
-        let rx_result_dequeue_count = cache_args.ring.dequeue_burst::<RxResult>(&rx_result_list, cache_args.batch_count);
-        for i in 0..rx_result_dequeue_count {
-            debug_log!("Cache{} start", cache_args.id);
-            // debug_log!("Cache{} rx_result malloc", cache_args.id);
-            // let cache_result = cache_result_ring_buf.malloc();
-            // debug_log!("Cache{} done rx_result malloc", cache_args.id);
+        let pkt_dequeue_count = cache_args.ring.dequeue_burst::<Pkt>(&pkt_list, cache_args.batch_count);
+        for i in 0..pkt_dequeue_count {
 
-            let rx_result = rx_result_list.get(i);
-            debug_log!("Cache{} start1", cache_args.id);
-            let hash_calc_result = unsafe { &mut *rx_result.hash_calc_result };
-            debug_log!("Cache{} start2", cache_args.id);
+            let pkt = pkt_list.get(i);
+            let pkt_analysis_result = &mut pkt.pkt_analysis_result;
 
-            rx_result.cache_id = cache_args.id;
-            rx_result.is_cache_hit = false;
-            // cache_result.is_cache_hit = false;
-            // cache_result.rx_result = (*rx_result) as *mut RxResult;
+            pkt_analysis_result.cache_id = cache_args.id;
+            pkt_analysis_result.is_cache_hit = false;
 
-            if hash_calc_result.is_lbf_hit {
-                debug_log!("Cache{} Check L1 Cache", cache_args.id);
+
+            if pkt_analysis_result.is_lbf_hit {
+                debug_log!("Cache{} Check L2 Cache", cache_args.id);
                 // l2 cache
-                let cache_element = cache_args.l2_cache[hash_calc_result.l2_hash as usize].read().unwrap();
-                if cache_element.cmp_ptr_key(hash_calc_result.l2_key.as_ptr(), hash_calc_result.l2_key_len as isize) {
+                let cache_element = cache_args.l2_cache[pkt_analysis_result.l2_hash as usize].read().unwrap();
+                if cache_element.cmp_ptr_key(pkt_analysis_result.l2_key.as_ptr(), pkt_analysis_result.l2_key_len as isize) {
                     debug_log!("Cache{} Hit L2 Cache", cache_args.id);
-                    rx_result.cache_data = cache_element.data.clone();
-                    rx_result.is_cache_hit = true;
+                    pkt_analysis_result.cache_data = cache_element.data.clone();
+                    pkt_analysis_result.is_cache_hit = true;
 
                     debug_log!("Cache{} enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
-                    if cache_args.pipeline_ring_list[next_pipeline_core].enqueue(*rx_result) < 0 {
+                    if cache_args.pipeline_ring_list[next_pipeline_core].enqueue(*pkt_list.get(i)) < 0 {
                         debug_log!("Cache{} failed enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
-                        rx_result.pktbuf.free();
-                        unsafe { (*rx_result.hash_calc_result).free(); };
-                        rx_result.free();
+                        // pkt_analysis_result.pktbuf.free();
+                        // unsafe { (*pkt_analysis_result.hash_calc_result).free(); };
+                        // hash_calc_result.free();
+                        (*pkt_analysis_result).free();
+                        (*pkt).free();
                         // cache_result.free();
                         continue;
                     }
@@ -126,7 +94,7 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
 
 
             // l3 cache (tss)
-            // let cache_data = cache_args.l3_cache.search(rx_result.raw_pkt, &mut tss_key_store);
+            // let cache_data = cache_args.l3_cache.search(pkt_analysis_result.raw_pkt, &mut tss_key_store);
             // match cache_data {
             //     Some(cache_data) => {
             //         cache_result.cache_data = cache_data;
@@ -135,19 +103,20 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
             //     None => {},
             // }
 
+
             debug_log!("Cache{} enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
-            if cache_args.pipeline_ring_list[next_pipeline_core].enqueue(*rx_result) < 0 {
+            if cache_args.pipeline_ring_list[next_pipeline_core].enqueue(*pkt_list.get(i)) < 0 {
                 debug_log!("Cache{} failed enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
-                rx_result.pktbuf.free();
-                unsafe { (*rx_result.hash_calc_result).free(); };
-                rx_result.free();
-                // cache_result.free();
+                // pkt_analysis_result.pktbuf.free();
+                // hash_calc_result.free();
+                (*pkt_analysis_result).free();
+                (*pkt).free();
                 continue;
             }
             debug_log!("Cache{} complete enqueue to Pipeline Core {}", cache_args.id, next_pipeline_core);
 
+
             next_pipeline_core = next_core(next_pipeline_core, cache_args.pipeline_ring_list.len());
-            debug_log!("Cache{} continue", cache_args.id);
             continue;
         }
 
@@ -156,5 +125,4 @@ pub extern "C" fn start_cache(cache_args_ptr: *mut c_void) -> i32 {
             return 0;
         }
     }
-    // 0
 }

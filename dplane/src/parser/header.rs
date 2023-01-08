@@ -5,8 +5,12 @@ pub struct Header {
     pub fields: Array<Field>,
     pub used_fields: Array<Field>,
     pub parse_fields: Array<Field>,
+    pub l2_key_fields: Array<Field>,
+
     pub fields_len: usize,
     pub used_fields_len: usize,
+    pub parse_fields_len: usize,
+    pub l2_key_fields_len: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -23,6 +27,7 @@ impl Header {
         let mut fields = Array::<Field>::new(field_len_list.len());
         let mut used_fields = Array::<Field>::new(used_field_index_list.len());
         let mut parse_fields = Array::<Field>::new(parse_field_index_list.len());
+        let mut l2_key_fields = Array::<Field>::new(used_field_index_list.len() + parse_field_index_list.len());
         
         let mut pre_field = &Field {
             start_byte_pos: 0,
@@ -37,11 +42,13 @@ impl Header {
         } 
 
         for (i, field_index) in used_field_index_list.iter().enumerate() {
-            used_fields[i] = fields[*field_index as usize].clone();
+            used_fields[i] = fields[*field_index as usize];
+            l2_key_fields[i] = fields[*field_index as usize];
         }
 
         for (i, field_index) in parse_field_index_list.iter().enumerate() {
-            parse_fields[i] = fields[*field_index as usize].clone();
+            parse_fields[i] = fields[*field_index as usize];
+            l2_key_fields[i + used_fields.len()] = fields[*field_index as usize];
         }
 
 
@@ -49,8 +56,11 @@ impl Header {
             fields,
             used_fields,
             parse_fields,
+            l2_key_fields,
             fields_len: field_len_list.len(),
             used_fields_len: used_field_index_list.len(),
+            parse_fields_len: parse_field_index_list.len(),
+            l2_key_fields_len: l2_key_fields.len(),
         }
     }
 }
