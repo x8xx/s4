@@ -108,7 +108,7 @@ impl<T> IndexMut<usize> for Array<T> {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Ring {
     ring: *mut dpdk_sys::rte_ring,
 }
@@ -157,24 +157,73 @@ impl Ring {
         }.try_into().unwrap()
     }
 
-    pub fn enqueue<T>(&self, obj: &mut T) -> usize {
+    pub fn enqueue<T>(&self, obj: &mut T) -> i32 {
         unsafe {
             dpdk_sys::rte_ring_enqueue(
                 self.ring,
                 obj as *mut T as *mut c_void,
             )
-        }.try_into().unwrap()
+        }
     }
 
-    pub fn dequeue<T>(&self, obj: &mut &mut T) -> usize {
+    pub fn dequeue<T>(&self, obj: &mut &mut T) -> i32 {
         unsafe {
             dpdk_sys::rte_ring_dequeue(
                 self.ring,
                 obj as *mut &mut T as *mut *mut T as *mut *mut c_void,
             )
-        }.try_into().unwrap()
+        }
+    }
+
+    pub fn free(self) {
+        unsafe {
+            dpdk_sys::rte_ring_free(self.ring);
+        }
+
     }
 }
+
+
+#[derive(Clone, Copy)]
+pub struct Locker {
+    ring: Ring,
+}
+
+impl  Locker {
+    pub fn new() -> Self {
+        Locker {
+            ring: Ring::new(2),
+        }
+    }
+
+    pub fn unlock(&mut self) {
+        let mut null = false;
+        self.ring.enqueue(&mut null);
+    }
+
+    pub fn wait(&self) -> bool {
+        let mut receiver = false;
+        let mut ref_receiver = &mut receiver;
+        loop {
+            if self.ring.dequeue::<bool>(&mut ref_receiver) == 0 {
+                break;
+            }
+        }
+        true
+    }
+
+    pub fn check(&self) -> bool {
+        let mut receiver = false;
+        let mut ref_receiver = &mut receiver;
+        self.ring.dequeue::<bool>(&mut ref_receiver) == 0
+    }
+
+    pub fn free(self) {
+        self.ring.free();
+    }
+}
+
+
 
 
 pub struct RingBuf<T> {
