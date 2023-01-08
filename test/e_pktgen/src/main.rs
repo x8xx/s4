@@ -1,6 +1,5 @@
 mod dpdk;
 mod mode;
-// mod tx;
 
 
 use std::io::stdin;
@@ -95,7 +94,7 @@ fn main() {
             let mut gen_args_list = Vec::new();
             for i in 0..max_tx_queues - 1 {
                 gen_args_list.push(mode::time::gen::GenArgs {
-                    batch_count: 32,
+                    batch_count: 16,
                     gen_lib_path: gen_lib_path.to_string(),
                     interface: dpdk::interface::Interface {
                         port_number,
