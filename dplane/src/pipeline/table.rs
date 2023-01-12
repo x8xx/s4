@@ -1,6 +1,6 @@
 use crate::config::DpConfigTable;
-use crate::core::logger::log::*;
 use crate::core::memory::array::Array;
+use crate::core::memory::ptr::Ptr;
 use crate::parser::header::Header;
 use crate::parser::parse_result::ParseResult;
 use crate::cache::cache::CacheRelation;
@@ -21,13 +21,13 @@ pub enum Tree {
     Avl(AvlTree),
 }
 
+
 pub struct Table {
-    // pub entries: Array<FlowEntry>,
     pub tree: Tree,
     pub tree_key_index: usize,
+
     pub keys: Array<(MatchField, MatchKind)>,
     pub default_entry: FlowEntry,
-    // pub len: usize,
     pub header_list: Array<Header>,
 }
 
@@ -72,6 +72,7 @@ impl Table {
         } else {
             Tree::Avl(AvlTree::new(0))
         };
+
         for (i, key) in table_conf.keys.iter().enumerate() {
             let match_field = (key.header_id as usize, key.field_id as usize);
             let match_kind = if key.match_kind == "lpm" {
@@ -96,12 +97,10 @@ impl Table {
 
 
         Table {
-            // entries: Array::new(table_conf.max_size as usize),
             tree,
             tree_key_index: table_conf.tree_key_index,
             keys,
             default_entry,
-            // len: 0,
             header_list,
         }
     }
@@ -124,7 +123,6 @@ impl Table {
                 }
             }
         };
-
 
         fn lpm_check(new_entry: &MatchFieldValue, old_entry: &MatchFieldValue) -> bool {
             // new: any, old: value => false
@@ -174,13 +172,12 @@ impl Table {
                     continue;
                 }
 
-                let match_field = self.keys[j].0;
+                let match_field = &self.keys[j].0;
                 let match_kind = &self.keys[j].1;
 
                 // any check
                 let value = match &entries[i].values[j].value {
                     Some(value) => {
-                        // debug_log!("SearchTable not any");
                         value
                     },
                     // any
@@ -235,6 +232,8 @@ impl Table {
 
 
     pub fn insert(&mut self, entry: FlowEntry) {
+        let entry = Ptr::new(entry);
+
         match &mut self.tree {
             Tree::Radix(tree) => {
                 tree.add(entry);
@@ -255,10 +254,10 @@ impl Table {
 #[cfg(test)]
 mod tests {
     use super::Table;
-    // use super::Tree;
     use super::FlowEntry;
     use super::ActionSet;
     use super::MatchFieldValue;
+    use crate::core::helper::linux;
     use crate::config::DpConfigTable;
     use crate::config::DpConfigTableKey;
     use crate::core::memory::array::Array;
@@ -404,6 +403,8 @@ mod tests {
 
     #[test]
     fn test_table_search() {
+        linux::init();
+
         let header_list = get_header_list_1();
 
         let mut table_conf = DpConfigTable {

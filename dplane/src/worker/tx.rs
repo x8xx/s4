@@ -24,14 +24,20 @@ pub extern "C" fn start_tx(tx_args_ptr: *mut c_void) -> i32 {
 
     let mut send_count = 0;
     let mut loss_count = 0;
+    let mut check_count = 0;
     loop {
         // let pktbuf_dequeue_count = tx_args.ring.dequeue_burst_resume::<PktBuf>(&pktbuf_list, next_dequeue_pos, dequeue_size);
         let pktbuf_dequeue_count = tx_args.ring.dequeue_burst::<RawPktBuf>(&raw_pktbuf_list, tx_args.batch_count);
         if pktbuf_dequeue_count > 0 {
             let success_count = tx_args.interface.tx(&raw_pktbuf_list, pktbuf_dequeue_count);
 
-            send_count += success_count as u64;
-            loss_count += pktbuf_dequeue_count as u64 - success_count as u64;
+            // send_count += success_count as u64;
+            // check_count += success_count as u64;
+            // loss_count += pktbuf_dequeue_count as u64 - success_count as u64;
+            // if check_count == 2000000 {
+            //     println!("check count {}", check_count);
+            //     check_count = 0;
+            // }
             // println!("success count {}", success_count);
             // println!("send/loss count {}/{}", send_count, loss_count);
         }

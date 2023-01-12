@@ -5,6 +5,8 @@ use std::mem::size_of;
 use std::ptr::null_mut;
 use std::slice::from_raw_parts_mut;
 use std::ffi::c_void;
+use crate::core::memory::heap::Heap;
+use crate::core::memory::heap::HEAP;
 
 
 #[derive(Clone, Copy)]
@@ -18,13 +20,15 @@ unsafe impl<T> Sync for Array<T> {}
 
 impl<T> Array<T> {
     pub fn new(len: usize) -> Self {
-        let data = if len != 0 {
-            unsafe {
-                libc::malloc(len * size_of::<T>()) as *mut T
-            }
-        } else {
-            null_mut() as *mut T
-        };
+        // let data = if len != 0 {
+        //     unsafe {
+        //         libc::malloc(len * size_of::<T>()) as *mut T
+        //     }
+        // } else {
+        //     null_mut() as *mut T
+        // };
+        let mut heap = Heap::new().write().unwrap();
+        let data = heap.malloc::<T>(len);
 
         Array {
             data,

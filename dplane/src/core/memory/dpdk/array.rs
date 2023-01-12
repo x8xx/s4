@@ -6,12 +6,13 @@ use std::mem::size_of;
 use std::ptr::null_mut;
 use std::slice::from_raw_parts_mut;
 use std::os::raw::c_char;
+use crate::core::memory::heap::Heap;
 
 
 #[derive(Clone, Copy)]
 pub struct Array<T> {
     data: *mut T,
-    memzone: *const dpdk_sys::rte_memzone,
+    // memzone: *const dpdk_sys::rte_memzone,
     len: usize,
 }
 
@@ -19,7 +20,7 @@ unsafe impl<T> Send for Array<T> {}
 unsafe impl<T> Sync for Array<T> {}
 
 impl<T> Array<T> {
-    pub fn new(len: usize) -> Self {
+    pub fn new2(len: usize) -> Self {
         let (memzone, data) = if len != 0 {
             let memzone = unsafe {
                 dpdk_sys::rte_memzone_reserve(
@@ -37,7 +38,34 @@ impl<T> Array<T> {
 
         Array {
             data,
-            memzone,
+            // memzone,
+            len,
+        }
+
+    }
+
+    pub fn new(len: usize) -> Self {
+        // let (memzone, data) = if len != 0 {
+        //     let memzone = unsafe {
+        //         dpdk_sys::rte_memzone_reserve(
+        //             // crate::core::helper::dpdk::gen_random_name(),
+        //             crate::core::helper::dpdk::gen_random_name().as_ptr() as *mut c_char,
+        //             size_of::<T>() * len,
+        //             dpdk_sys::rte_socket_id() as i32,
+        //             dpdk_sys::RTE_MEMZONE_SIZE_HINT_ONLY
+        //         )
+        //     };
+        //     (memzone, unsafe { (*memzone).__bindgen_anon_1.addr as *mut T })
+        // } else {
+        //     (null_mut() as *const dpdk_sys::rte_memzone, null_mut() as *mut T)
+        // };
+
+        let mut heap = Heap::new().write().unwrap();
+        let data = heap.malloc::<T>(len);
+
+        Array {
+            data,
+            // memzone,
             len,
         }
     }
@@ -45,7 +73,7 @@ impl<T> Array<T> {
     pub fn new_manual(data: *mut T, len: usize) -> Self {
         Array {
             data,
-            memzone: null_mut(),
+            // memzone: null_mut(),
             len,
         }
     }
@@ -80,16 +108,16 @@ impl<T> Array<T> {
 
     pub fn free(self) {
         unsafe {
-            if self.memzone != null_mut() {
-                dpdk_sys::rte_memzone_free(self.memzone);
-            }
+            // if self.memzone != null_mut() {
+            //     dpdk_sys::rte_memzone_free(self.memzone);
+            // }
         }
     }
 
     pub fn clone(&self) -> Self {
         Array {
             data: self.data,
-            memzone: self.memzone,
+            // memzone: self.memzone,
             len: self.len,
         }
     }

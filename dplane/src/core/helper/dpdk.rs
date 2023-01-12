@@ -4,6 +4,7 @@ use std::os::raw::c_char;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use crate::core::thread::thread::thread_init;
+use crate::core::memory::heap::Heap;
 
 
 pub fn gen_random_name() -> CString {
@@ -33,6 +34,9 @@ pub fn init() -> i32 {
         }
 
         thread_init(); 
+        // Heap::init(536870912, 15);
+        Heap::init(1073741824, 15);
+
 
         ret + 1
     }

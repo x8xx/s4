@@ -312,10 +312,13 @@ impl Field {
 #[cfg(test)]
 mod tests {
     use super::Field;
+    use crate::core::helper::linux;
     use crate::core::memory::array::Array;
 
     #[test]
     fn test_field_new() {
+        linux::init();
+
         let mut field = Field {
             start_byte_pos: 0,
             start_bit_mask: 0,
@@ -381,6 +384,8 @@ mod tests {
 
     #[test]
     fn test_copy_ptr_value() {
+        linux::init();
+
         let mut src = Array::<u8>::new(10);
         let mut dst = Array::<u8>::new(10);
 
@@ -433,6 +438,8 @@ mod tests {
 
     #[test]
     fn test_cmp_pkt() {
+        linux::init();
+
         let mut pkt = Array::<u8>::new(10);
         pkt[0] = 10;
         pkt[1] = 20;
@@ -457,7 +464,7 @@ mod tests {
         value[1] = 20;
         value[2] = 128;
         assert!(field.cmp_pkt(pkt.as_ptr(), 0, &value, 0x80));
-        value.free();
+        // value.free();
 
 
         // LPM
@@ -472,7 +479,7 @@ mod tests {
         value[1] = 20;
         value[2] = 129;
         assert!(field.cmp_pkt(pkt.as_ptr(), 0, &value, 0xff));
-        value.free();
+        // value.free();
 
 
         // LPM
@@ -488,7 +495,7 @@ mod tests {
         value[2] = 129;
         value[3] = 32;
         assert!(field.cmp_pkt(pkt.as_ptr(), 0, &value, 0xE0));
-        value.free();
+        // value.free();
 
 
         field = Field {
@@ -503,7 +510,7 @@ mod tests {
         value[2] = 60;
         value[3] = 70;
         assert!(field.cmp_pkt(pkt.as_ptr(), 3, &value, 0xff));
-        value.free();
+        // value.free();
 
 
         field = Field {
@@ -515,12 +522,14 @@ mod tests {
         value = Array::<u8>::new(1);
         value[0] = 64;
         assert!(field.cmp_pkt(pkt.as_ptr(), 8, &value, 0xC0));
-        value.free();
+        // value.free();
     }
 
 
     #[test]
     fn test_cmp_pkt_ge_value() {
+        linux::init();
+
         let mut pkt = Array::<u8>::new(10);
         pkt[0] = 10;
         pkt[1] = 20;
@@ -572,6 +581,8 @@ mod tests {
 
     #[test]
     fn test_cmp_pkt_le_value() {
+        linux::init();
+
         let mut pkt = Array::<u8>::new(10);
         pkt[0] = 10;
         pkt[1] = 20;

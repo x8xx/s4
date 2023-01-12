@@ -9,7 +9,7 @@ use crate::pipeline::table::Table;
 use crate::pipeline::output::Output;
 
 // runtime native api
-use crate::pipeline::runtime_native_api::PipelineArgs;
+use crate::pipeline::runtime_native_api::RuntimeArgs;
 use crate::pipeline::runtime_native_api::debug;
 use crate::pipeline::runtime_native_api::table_search;
 use crate::pipeline::runtime_native_api::pkt_get_header_len;
@@ -64,7 +64,7 @@ impl Pipeline {
 
 
     pub fn run_pipeline(&mut self, pkt: *mut u8, pkt_len: usize, parse_result: &ParseResult, cache_data: &mut CacheData, output: &mut Output) {
-        let pipeline_args = PipelineArgs {
+        let runtime_args = RuntimeArgs {
             table_list: &self.table_list,
             pkt,
             pkt_len,
@@ -73,13 +73,13 @@ impl Pipeline {
             cache_data,
             output,
         };
-        runtime::set_runtime_arg_i64!(self.runtime_args, 0, &pipeline_args as *const PipelineArgs as i64);
+        runtime::set_runtime_arg_i64!(self.runtime_args, 0, &runtime_args as *const RuntimeArgs as i64);
         runtime::call_runtime!(self.runtime, "run_pipeline", self.runtime_args);
     }
 
 
     pub fn run_cache_pipeline(&mut self, pkt: *mut u8, pkt_len: usize, parse_result: &ParseResult, cache_data: &mut CacheData, output: &mut Output) {
-        let pipeline_cache_args = PipelineArgs {
+        let runtime_cache_args = RuntimeArgs {
             table_list: &self.table_list,
             pkt,
             pkt_len,
@@ -88,7 +88,7 @@ impl Pipeline {
             cache_data,
             output,
         };
-        runtime::set_runtime_arg_i64!(self.runtime_args, 0, &pipeline_cache_args as *const PipelineArgs as i64);
+        runtime::set_runtime_arg_i64!(self.runtime_args, 0, &runtime_cache_args as *const RuntimeArgs as i64);
         runtime::call_runtime!(self.runtime, "run_pipeline", self.runtime_args);
     }
 }

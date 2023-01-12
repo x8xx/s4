@@ -6,6 +6,7 @@ use std::ptr::null_mut;
 use std::slice::from_raw_parts_mut;
 use std::os::raw::c_char;
 use std::ffi::c_void;
+use crate::core::memory::heap::Heap;
 
 
 #[derive(Clone, Copy)]
@@ -25,17 +26,20 @@ unsafe impl<T> Sync for Vector<T> {}
 
 impl<T: Copy> Vector<T> {
     pub fn new(len: usize, extend_size: usize) -> Self {
-        let data = if len != 0 {
-            unsafe {
-                libc::malloc(len * size_of::<T>()) as *mut T
-            }
-        } else {
-            null_mut() as *mut T
-        };
+        // let data = if len != 0 {
+        //     unsafe {
+        //         libc::malloc(len * size_of::<T>()) as *mut T
+        //     }
+        // } else {
+        //     null_mut() as *mut T
+        // };
 
+        let mut heap = Heap::new().write().unwrap();
+        let data = heap.malloc::<T>(len);
 
         let meta = unsafe {
-            let meta =  libc::malloc(1 * size_of::<VectorMeta>()) as *mut VectorMeta;
+            let meta = heap.malloc::<VectorMeta>(1);
+            // let meta =  libc::malloc(1 * size_of::<VectorMeta>()) as *mut VectorMeta;
             (*meta).pos = 0;
             (*meta).len = len;
             (*meta).extend_size = extend_size;
@@ -65,12 +69,17 @@ impl<T: Copy> Vector<T> {
                 std::ptr::write::<T>(self.data.offset((*self.meta).pos as isize), value);
             } else {
                 let new_len = (*self.meta).len + (*self.meta).extend_size;
-                let new_data = libc::malloc(new_len * size_of::<T>()) as *mut T;
+                // let new_data = libc::malloc(new_len * size_of::<T>()) as *mut T;
+                let new_data = {
+                    let mut heap = Heap::new().write().unwrap();
+                    heap.malloc(size_of::<T>() * new_len) as *mut T
+                };
+
                 for i in 0..(*self.meta).len {
                     *new_data.offset(i as isize) = *self.data.offset(i as isize);
                 }
 
-                libc::free(self.data as *mut c_void);
+                // libc::free(self.data as *mut c_void);
 
                 self.data = new_data;
                 (*self.meta).len = new_len;

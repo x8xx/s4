@@ -6,7 +6,7 @@ use crate::core::logger::log::debug_log;
 use crate::core::memory::ring::Ring;
 use crate::core::memory::ring::RingBuf;
 use crate::core::memory::ring::{init_ringbuf_element, malloc_ringbuf_all_element, free_ringbuf_all_element};
-use crate::core::memory::heap::Heap;
+// use crate::core::memory::heap::Heap;
 use crate::core::memory::array::Array;
 use crate::core::network::pktbuf::PktBuf;
 use crate::core::network::interface::Interface;
@@ -65,10 +65,6 @@ pub struct PktAnalysisResult<'a> {
     pub rx_id: usize,
     pub cache_id: usize,
 
-    // pkt mbuf
-    // pub pktbuf: PktBuf,
-    // pub raw_pkt: *mut u8,
-    // pub pkt_len: usize,
 
     // parse result
     pub parse_result: ParseResult,
@@ -77,7 +73,7 @@ pub struct PktAnalysisResult<'a> {
     // cache
     pub cache_data: CacheData,
     pub is_cache_hit: bool,
-    // pub hash_calc_result: Option<&'a HashCalcResult>,
+
 
     pub l1_key: Array<u8>,
     pub l1_key_len: usize,
@@ -111,27 +107,6 @@ impl<'a> PktAnalysisResult<'a> {
 }
 
 
-// pub struct HashCalcResult {
-//     pub owner_ring: *mut RingBuf<HashCalcResult>,
-//     pub parse_result_owner_ring: *mut RingBuf<ParseResult>,
-
-//     pub l1_hash: u16,
-//     pub l2_key: Array<u8>,
-//     pub l2_key_len: u8,
-//     pub l2_hash: u16,
-//     pub is_lbf_hit: bool,
-// }
-
-// impl HashCalcResult {
-//     pub fn free(&mut self) {
-//         unsafe {
-//             debug_log!("Free HashCalcResult {}", self as *mut HashCalcResult as u64);
-//             (*self.owner_ring).free(self);
-//         }
-//     }
-// }
-
-
 fn select_cache_core(core_flag: u64, core_len: usize, start_pos: usize) -> usize {
     for i in start_pos..core_len {
         if ((core_flag & (1 << i)) >> i) == 1 {
@@ -156,10 +131,10 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     log!("Init Rx{} Core - Port {} Queue {}", rx_args.id, rx_args.interface.port, rx_args.interface.queue);
 
 
-    let mut heap = Heap::new(rx_args.pktbuf_size * (
-                1 + rx_args.header_list.len() + rx_args.l2_key_max_len as usize + rx_args.header_max_size + rx_args.table_list_len
-            )
-        );
+    // let mut heap = Heap::new(rx_args.pktbuf_size * (
+    //             1 + rx_args.header_list.len() + rx_args.l2_key_max_len as usize + rx_args.header_max_size + rx_args.table_list_len
+    //         )
+    //     );
 
     // init  ringbuf (Pkt)
     debug_log!("Rx{} init pkt_ring_buf", rx_args.id);
@@ -182,30 +157,18 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             pkt_analysis_result.rx_id = rx_args.id;
 
 
-            pkt_analysis_result.parse_result.metadata = heap.malloc(1); 
+            pkt_analysis_result.parse_result.metadata = Array::new(1); 
             pkt_analysis_result.parse_result.metadata[Metadata::InPort as usize] = rx_args.id as u32 + 1;
-            pkt_analysis_result.parse_result.header_list = heap.malloc(rx_args.header_list.len());
+            pkt_analysis_result.parse_result.header_list = Array::new(rx_args.header_list.len());
 
 
-            pkt_analysis_result.l1_key = heap.malloc(rx_args.header_max_size);
-            pkt_analysis_result.cache_data = heap.malloc(rx_args.table_list_len);
-            pkt_analysis_result.l2_key = heap.malloc(rx_args.l2_key_max_len as usize);
+            pkt_analysis_result.l1_key = Array::new(rx_args.header_max_size);
+            pkt_analysis_result.cache_data = Array::new(rx_args.table_list_len);
+            pkt_analysis_result.l2_key = Array::new(rx_args.l2_key_max_len as usize);
         }
         free_ringbuf_all_element!(pkt_analysis_result_ring_buf, pkt_analysis_result_array);
     }
     debug_log!("Rx{} done init pkt_analysis_result_ring_buf", rx_args.id);
-
-
-
-    // // init  ringbuf (hash_calc_result)
-    // debug_log!("Rx{} init hash_calc_result_ring_buf", rx_args.id);
-    // let mut hash_calc_result_ring_buf = RingBuf::<HashCalcResult>::new(rx_args.pktbuf_size);
-    // init_ringbuf_element!(hash_calc_result_ring_buf, HashCalcResult, {
-    //     owner_ring => &mut hash_calc_result_ring_buf as *mut RingBuf<HashCalcResult>,
-    //     l2_key => heap.malloc(rx_args.l2_key_max_len as usize),
-    // });
-    // debug_log!("Rx{} done init hash_calc_result_ring_buf", rx_args.id);
-
 
 
 
@@ -227,10 +190,6 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 // continue;
             }
             // rx_args.interface.debug_show_info();
-
-            // debug_log!("Rx{} pkt_analysis_result malloc", rx_args.id);
-            // let pkt_analysis_result = pkt_analysis_result_ring_buf.malloc();
-            // debug_log!("Rx{} done pkt_analysis_result malloc", rx_args.id);
 
 
             debug_log!("Rx{} get raw pkt", rx_args.id);
@@ -275,11 +234,6 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
 
 
 
-            // pkt_analysis_result.raw_pkt = pkt;
-            // pkt_analysis_result.pktbuf = pktbuf_list[i].clone();
-
-
-
             /*
              * L1 Cache
              */
@@ -319,13 +273,8 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
             debug_log!("Rx{} No Hit L1 Cache", rx_args.id);
 
 
-            // debug_log!("Rx{} hash_calc_result malloc", rx_args.id);
-            // let hash_calc_result = hash_calc_result_ring_buf.malloc();
-            // debug_log!("Rx{} done hash_calc_result malloc", rx_args.id);
             pkt_analysis_result.is_lbf_hit = false;
             pkt_analysis_result.l1_hash = l1_hash;
-
-
 
 
 
@@ -345,20 +294,12 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 }
 
                 let fields = &rx_args.header_list[j].l2_key_fields;
-                // let used_fields = &rx_args.header_list[j].used_fields;
-                // let parse_fields = &rx_args.header_list[j].parse_fields;
 
                 for k in 0..fields.len() {
                     l2_key_next_offset += unsafe {
                         fields[k].copy_ptr_value(parsed_header_list[j].offset as isize, raw_pkt, l2_key_ptr.offset(l2_key_next_offset))
                     };
                 }
-
-//                 for k in 0..parse_fields.len() {
-//                     l2_key_next_offset += unsafe {
-//                         parse_fields[k].copy_ptr_value(parsed_header_list[j].offset as isize, pkt, l2_key_ptr.offset(l2_key_next_offset))
-//                     };
-//                 }
             }
             pkt_analysis_result.l2_key_len = l2_key_next_offset as u8;
             debug_log!("Rx{} done L2 Key", rx_args.id);
@@ -387,14 +328,10 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
                 pkt.pkt_analysis_result = pkt_analysis_result;
 
 
-                
-
                 debug_log!("Rx{} enqueue to Cache Core {}", rx_args.id, cache_core_index);
                 // pkt_analysis_result.hash_calc_result = Some(hash_calc_result);
                 if rx_args.cache_ring_list[cache_core_index].enqueue(pkt) < 0 {
                     debug_log!("Rx{} failed enqueue to Cache Core {}", rx_args.id, cache_core_index);
-                    // pkt_analysis_result.hash_calc_result.unwrap().free();
-                    // pkt_analysis_result.pktbuf.free();
                     pkt.pkt_analysis_result.free();
                     pkt.pktbuf.free();
                     pkt.free();

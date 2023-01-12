@@ -48,21 +48,27 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         table_list.init(i, RwLock::new(Table::new(table_conf, header_list.clone())));
     }
 
+    {
+        let mut table = table_list[0].try_write().unwrap();
+        table.default_entry.action.action_id = 2;
+    }
+
     // initial flowentry
     // entry_count(4byte) | (table_id(1byte) | entry_buf_size(2byte) | entry)*
     println!("init flow entry");
     let initial_table_data = &switch_config.initial_table_data;
     if initial_table_data.len() != 0 {
         let entry_sum_size: u32 = ((initial_table_data[3] as u32) << 24) + ((initial_table_data[2] as u32) << 16) + ((initial_table_data[1] as u32) << 8) + initial_table_data[0] as u32;
-        let mut flow_entry_heap = Heap::new(entry_sum_size as usize);
+        // let mut flow_entry_heap = Heap::new(entry_sum_size as usize);
         let entry_count: u32 = ((initial_table_data[7] as u32) << 24) + ((initial_table_data[6] as u32) << 16) + ((initial_table_data[5] as u32) << 8) + initial_table_data[4] as u32;
         let mut pos = 8;
-        for _ in 0..entry_count as usize {
+        for i in 0..entry_count as usize {
             let table_id = initial_table_data[pos];
             pos += 1;
             let entry_buf_size = ((initial_table_data[pos + 1] as u16) << 8) + initial_table_data[pos] as u16;
             pos += 2;
-            table_controller::add_flow_entry(&mut table_list[table_id as usize], &initial_table_data[pos..pos+entry_buf_size as usize], &mut flow_entry_heap);
+            // table_controller::add_flow_entry(&mut table_list[table_id as usize], &initial_table_data[pos..pos+entry_buf_size as usize], &mut flow_entry_heap);
+            table_controller::add_flow_entry(&mut table_list[table_id as usize], &initial_table_data[pos..pos+entry_buf_size as usize]);
             pos += entry_buf_size as usize;
         }
     }
@@ -106,6 +112,8 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     // let cache_creater_ring_size = 8192;
     //
     let pktbuf_size = 16777216;
+    // let pktbuf_size = 1048576;
+    // let pktbuf_size = 524288;
     // let pktbuf_size = 262144;
     // let pktbuf_size = 65536;
     // let pktbuf_size = 8192;
@@ -162,7 +170,7 @@ pub fn start_controller(switch_config: &SwitchConfig) {
     }
 
     // 512MB
-    let mut heap = Heap::new(536870912); 
+    // let mut heap = Heap::new(536870912); 
     
     // rx_args_list
     // tx_args_list
@@ -181,9 +189,9 @@ pub fn start_controller(switch_config: &SwitchConfig) {
             {
                 for k in 0..l2_cache_list[i][j].len() {
                     l2_cache_list[i][j].init(k, RwLock::new(CacheElement {
-                        key: heap.malloc(header_max_size),
+                        key: Array::new(header_max_size),
                         key_len: 0,
-                        data: heap.malloc(table_list.len()),
+                        data: Array::new(table_list.len()),
                     }));
                 }
             }
@@ -206,9 +214,9 @@ pub fn start_controller(switch_config: &SwitchConfig) {
         {
             for j in 0..l1_cache_list[i].len() {
                 l1_cache_list[i].init(j, RwLock::new(CacheElement {
-                    key: heap.malloc(header_max_size),
+                    key: Array::new(header_max_size),
                     key_len: 0,
-                    data: heap.malloc(table_list.len()),
+                    data: Array::new(table_list.len()),
                 }));
             }
         }
