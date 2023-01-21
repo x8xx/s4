@@ -55,6 +55,7 @@ pub extern "C" fn start_gen(gen_args_ptr: *mut c_void) -> i32 {
 
         for i in 0..pktbuf_list.len() {
             pktbuf_list[i].append(1500);
+            // pktbuf_list[i].append(64);
             let (pkt, _) = pktbuf_list[i].get_raw_pkt();
             state = unsafe { fn_pktgen(pkt, state) };
         }

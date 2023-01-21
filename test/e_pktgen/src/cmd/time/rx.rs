@@ -35,17 +35,18 @@ pub extern "C" fn start_rx(rx_args_ptr: *mut c_void) -> i32 {
     let start_time = Instant::now();
     let end_time = Instant::now() + Duration::from_secs(rx_args.execution_time);
     loop {
-        let pkt_count = interface.rx(&mut pktbuf_list[0], 1024);
+        let pkt_count = interface.rx(&mut pktbuf_list[0], 8192);
         // println!("? {}", pkt_count);
         counter += pkt_count as u64;
         pktbuf_list[0].free(pkt_count as u32);
 
         // let now = Instant::now();
         if end_time < Instant::now() {
+            let result_time = Instant::now() - start_time;
+            println!("execution time: {}", (result_time).as_secs());
+            println!("{} receive pkt count: {}", rx_args.queue, counter);
             rx_args.end_locker.unlock();
             pktbuf_list.free();
-            println!("execution time: {}", (Instant::now() - start_time).as_secs());
-            println!("{} receive pkt count: {}", rx_args.queue, counter);
             return 0;
         }
 
